@@ -531,8 +531,10 @@ as $$
   ),
   contributed as (
     select member_id, coalesce(sum(amount), 0) as total_contributed
-    from contributions
+    from contributions c
+    join matches m on m.id = c.match_id
     where payment_status in ('PENDING', 'PAID')
+      and m.status = 'COMPLETED'
     group by member_id
   ),
   winnings as (

@@ -84,21 +84,27 @@ async function loadMatchForAdmin(matchId: string) {
     id: string;
     status: "SCHEDULED" | "LOCKED" | "LIVE" | "COMPLETED" | "CANCELLED";
     lock_at: string;
+    kickoff_at: string;
     stage_id: string;
     stage_code: string;
     stage_is_knockout: boolean;
     home_team_id: string;
     away_team_id: string;
+    result_locked: boolean;
+    result_locked_by: string | null;
   }>`
     select
       m.id,
       m.status,
       m.lock_at::text,
+      m.kickoff_at::text,
       m.stage_id,
       s.code as stage_code,
       s.is_knockout as stage_is_knockout,
       m.home_team_id,
-      m.away_team_id
+      m.away_team_id,
+      m.result_locked,
+      m.result_locked_by
     from matches m
     join stages s on s.id = m.stage_id
     where m.id = ${matchId}
@@ -472,6 +478,68 @@ export async function storePrediction(memberId: string, formData: FormData) {
   return matchId;
 }
 
+export async function raisePredictionIssue(formData: FormData) {
+  const member = await requireAuth();
+  const matchId = z.string().uuid().parse(formString(formData, "match_id"));
+  const reason = z.string().min(10).max(1000).parse(formString(formData, "reason"));
+
+  const matchRows = await typedSql<{
+    id: string;
+    status: string;
+  }>`
+    select id, status
+    from matches
+    where id = ${matchId}
+    limit 1
+  `;
+
+  const match = matchRows[0];
+  if (!match) {
+    throw new Error("Match not found.");
+  }
+
+  await sql`
+    insert into prediction_issue_reports (
+      match_id,
+      member_id,
+      reason,
+      status,
+      created_at
+    )
+    values (
+      ${matchId},
+      ${member.id},
+      ${reason},
+      'OPEN',
+      now()
+    )
+    on conflict (match_id, member_id)
+    do update set
+      reason = excluded.reason,
+      status = 'OPEN',
+      resolved_at = null,
+      resolved_by = null
+  `;
+
+  redirect("/");
+}
+
+export async function resolvePredictionIssue(formData: FormData) {
+  const admin = await requireAdmin();
+  const issueId = z.string().uuid().parse(formString(formData, "issue_id"));
+
+  await sql`
+    update prediction_issue_reports
+    set status = 'RESOLVED',
+        resolved_at = now(),
+        resolved_by = ${admin.id}
+    where id = ${issueId}
+      and status = 'OPEN'
+  `;
+
+  redirect("/");
+}
+
 export async function submitPrediction(formData: FormData) {
   const member = await requireAuth();
   await storePrediction(member.id, formData);
@@ -485,7 +553,7 @@ export async function syncLocks() {
 }
 
 export async function finalizeMatchResult(formData: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const matchId = z.string().uuid().parse(formString(formData, "match_id"));
   const match = await loadMatchForAdmin(matchId);
   if (!match) {
@@ -494,6 +562,13 @@ export async function finalizeMatchResult(formData: FormData) {
 
   if (match.status === "CANCELLED") {
     throw new Error("Cancelled fixtures cannot be finalized.");
+  }
+
+  const now = Date.now();
+  const kickoffTime = new Date(match.kickoff_at).getTime();
+  const resultReadyTime = kickoffTime + (match.stage_is_knockout ? 3 * 60 * 60 * 1000 : 90 * 60 * 1000);
+  if (match.status === "SCHEDULED" && now < resultReadyTime) {
+    throw new Error("This result is not ready to be updated yet.");
   }
 
   const homeScore = z.number().int().nonnegative().nullable().parse(formNumber(formData, "home_score"));
@@ -505,9 +580,15 @@ export async function finalizeMatchResult(formData: FormData) {
   const actualOutcome = z.enum(["HOME_WIN", "AWAY_WIN", "DRAW"]).parse(formString(formData, "actual_outcome"));
   const winnerTeamId = formNullableString(formData, "winner_team_id");
   const penaltyWinnerTeamId = formNullableString(formData, "penalty_winner_team_id");
+  const submitAction = formString(formData, "submit_action");
+  const lockResult = submitAction === "LOCK";
 
   if (homeScore === null || awayScore === null) {
     throw new Error("Enter regular-time scores.");
+  }
+
+  if (match.result_locked) {
+    throw new Error("Result is locked and cannot be updated.");
   }
 
   const derivedOutcome =
@@ -578,28 +659,80 @@ export async function finalizeMatchResult(formData: FormData) {
       ${wentPenalties},
       ${penaltyWinnerTeamId},
       ${actualOutcome},
-      ${winnerTeamId}
+      ${winnerTeamId},
+      ${lockResult},
+      ${lockResult ? admin.id : null}
     )
   `;
 
   redirect("/");
 }
 
-export async function updatePaymentStatus(formData: FormData) {
+export async function finalizeMemberSettlement(formData: FormData) {
   await requireAdmin();
-  const matchId = z.string().uuid().parse(formString(formData, "match_id"));
   const memberId = z.string().uuid().parse(formString(formData, "member_id"));
-  const paymentStatus = z.enum(["PENDING", "PAID", "WAIVED"]).parse(formString(formData, "payment_status"));
+  const settlementScopeRaw = formString(formData, "settlement_scope");
+  const settlementScope = settlementScopeRaw === "WEEKLY" || settlementScopeRaw === "STAGE" ? settlementScopeRaw : "MANUAL";
+  const label = formNullableString(formData, "label");
 
-  await sql`
-    update contributions
-    set payment_status = ${paymentStatus},
-        updated_at = now()
-    where match_id = ${matchId}
-      and member_id = ${memberId}
+  const rows = await typedSql<{
+    member_id: string;
+    current_amount: string;
+    current_status: "OPEN" | "RECEIVE" | "COLLECT" | "ZERO";
+    open_settlement_id: string | null;
+  }>`
+    select member_id, current_amount::text as current_amount, current_status, open_settlement_id
+    from get_member_settlement_statuses()
+    where member_id = ${memberId}
+    limit 1
   `;
 
-  await sql`select calculate_prize_distribution(${matchId})`;
+  const summary = rows[0];
+  if (!summary) {
+    throw new Error("Member settlement summary not found.");
+  }
+
+  if (summary.open_settlement_id) {
+    throw new Error("This member already has an open settlement.");
+  }
+
+  if (Number(summary.current_amount) === 0) {
+    throw new Error("There is no amount to finalize for this member.");
+  }
+
+  await sql`
+    select finalize_member_settlement(
+      ${memberId},
+      ${settlementScope},
+      ${label}
+    )
+  `;
+
+  redirect("/");
+}
+
+export async function settleMemberSettlement(formData: FormData) {
+  const admin = await requireAdmin();
+  const settlementId = z.string().uuid().parse(formString(formData, "settlement_id"));
+
+  await sql`
+    select settle_member_settlement(
+      ${settlementId},
+      ${admin.id}
+    )
+  `;
+
+  redirect("/");
+}
+
+export async function undoMemberSettlementFinalization(formData: FormData) {
+  await requireAdmin();
+  const settlementId = z.string().uuid().parse(formString(formData, "settlement_id"));
+
+  await sql`
+    select undo_member_settlement_finalization(${settlementId})
+  `;
+
   redirect("/");
 }
 

@@ -1,4 +1,7 @@
 import { Countdown } from "./countdown";
+import { MatchLeaderboardModal } from "./match-leaderboard-modal";
+import { MatchPredictionModal } from "./match-prediction-modal";
+import { currencyLabel } from "./dashboard-shared";
 import {
   cancelFixture,
   createFixture,
@@ -6,17 +9,22 @@ import {
   changeInitialPassword,
   changePassword,
   finalizeMatchResult,
+  finalizeMemberSettlement,
   loginWithPassword,
   logout,
+  raisePredictionIssue,
+  resolvePredictionIssue,
+  undoMemberSettlementFinalization,
+  settleMemberSettlement,
   syncLocks,
   updateFixture,
-  updatePaymentStatus,
   updateUnresolvedPool,
   updateStageAmount
 } from "@/app/actions";
 import { PredictionFormClient } from "./prediction-form-client";
 import type {
   DashboardData,
+  MatchLeaderboardBlock,
   MatchPredictionSummaryBlock,
   MatchRow,
   Team
@@ -87,6 +95,20 @@ function formatNepalDateTime(iso: string) {
   }).format(new Date(iso));
 }
 
+function resultReadyAt(match: MatchRow) {
+  const kickoff = new Date(match.kickoff_at).getTime();
+  if (Number.isNaN(kickoff)) {
+    return null;
+  }
+
+  return kickoff + (match.stage_is_knockout ? 3 * 60 * 60 * 1000 : 90 * 60 * 1000);
+}
+
+function canUpdateMatchResult(match: MatchRow) {
+  const readyAt = resultReadyAt(match);
+  return match.status !== "SCHEDULED" || (readyAt !== null && Date.now() >= readyAt);
+}
+
 function predictionSummaryText(match: MatchRow, teams: Team[]) {
   if (!match.prediction_id) {
     return null;
@@ -137,10 +159,6 @@ function badgeForStatus(status: MatchRow["status"]) {
     CANCELLED: "bg-rose-100 text-rose-900"
   };
   return map[status];
-}
-
-function currencyLabel(value: string | number) {
-  return `NPR ${value}`;
 }
 
 export function LoginCard({ errorMessage }: { errorMessage?: string | null }) {
@@ -321,11 +339,13 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 function UpcomingMatchCard({
   matches,
   teams,
-  memberRole
+  memberRole,
+  predictionSummaries
 }: {
   matches: MatchRow[];
   teams: Team[];
   memberRole: "ADMIN" | "MEMBER";
+  predictionSummaries: MatchPredictionSummaryBlock[];
 }) {
   if (matches.length === 0) {
     return (
@@ -381,6 +401,15 @@ function UpcomingMatchCard({
                   {match.prediction_id ? (
                     <span className="badge bg-amber-100 text-amber-900">Already predicted</span>
                   ) : null}
+                  {match.status === "LOCKED" || match.status === "LIVE" ? (
+                    <MatchPredictionModal
+                      match={match}
+                      teams={teams}
+                      rows={
+                        predictionSummaries.find((entry) => entry.match_id === match.id)?.rows ?? []
+                      }
+                    />
+                  ) : null}
                 </div>
               </div>
 
@@ -426,6 +455,28 @@ function UpcomingMatchCard({
                     <div className="mt-3">
                       <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
                     </div>
+                  </details>
+                ) : null}
+                {memberRole === "MEMBER" && match.prediction_id ? (
+                  <details className="mt-1 rounded-2xl border border-amber-900/15 bg-amber-50 p-3">
+                    <summary className="cursor-pointer list-none rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-amber-950 transition hover:bg-amber-50">
+                      Raise issue
+                    </summary>
+                    <form action={raisePredictionIssue} className="mt-3 space-y-3">
+                      <input type="hidden" name="match_id" value={match.id} />
+                      <textarea
+                        name="reason"
+                        className="field min-h-24"
+                        placeholder="Explain the issue in a few words."
+                        required
+                      />
+                      <p className="text-xs leading-5 text-amber-950/70">
+                        If 2 or 3 members flag the same match, admin will review the audit.
+                      </p>
+                      <button type="submit" className="btn-secondary w-full">
+                        Submit issue
+                      </button>
+                    </form>
                   </details>
                 ) : null}
               </div>
@@ -564,11 +615,15 @@ function PredictionVisibilityPanel({
 function MatchCard({
   match,
   teams,
-  memberRole
+  memberRole,
+  matchLeaderboards,
+  predictionSummaries
 }: {
   match: MatchRow;
   teams: Team[];
   memberRole: "ADMIN" | "MEMBER";
+  matchLeaderboards: MatchLeaderboardBlock[];
+  predictionSummaries: MatchPredictionSummaryBlock[];
 }) {
   return (
     <article className="rounded-[22px] border border-emerald-900/10 bg-white/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -584,8 +639,16 @@ function MatchCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
-          {match.prediction_id ? (
-            <span className="badge bg-amber-100 text-amber-900">Already predicted</span>
+          {match.prediction_id ? <span className="badge bg-amber-100 text-amber-900">Already predicted</span> : null}
+          {match.status === "LOCKED" || match.status === "LIVE" ? (
+            <MatchPredictionModal
+              match={match}
+              teams={teams}
+              rows={predictionSummaries.find((entry) => entry.match_id === match.id)?.rows ?? []}
+            />
+          ) : null}
+          {match.status === "COMPLETED" ? (
+            <MatchLeaderboardModal match={match} matchLeaderboards={matchLeaderboards} />
           ) : null}
         </div>
       </div>
@@ -619,6 +682,28 @@ function MatchCard({
           <div className="mt-3">
             <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
           </div>
+        </details>
+      ) : null}
+      {memberRole === "MEMBER" && match.prediction_id ? (
+        <details className="mt-4 rounded-[20px] border border-amber-900/15 bg-amber-50/70 p-3">
+          <summary className="cursor-pointer list-none text-sm font-semibold text-amber-950">
+            Raise issue
+          </summary>
+          <form action={raisePredictionIssue} className="mt-3 space-y-3">
+            <input type="hidden" name="match_id" value={match.id} />
+            <textarea
+              name="reason"
+              className="field min-h-24"
+              placeholder="Explain the issue in a few words."
+              required
+            />
+            <p className="text-xs leading-5 text-amber-950/70">
+              If 2 or 3 members flag the same match, admin will review the audit.
+            </p>
+            <button type="submit" className="btn-secondary w-full">
+              Submit issue
+            </button>
+          </form>
         </details>
       ) : null}
     </article>
@@ -805,10 +890,11 @@ function GroupStandingsSection({ data }: { data: DashboardData }) {
 function PrizePoolCard({ data }: { data: DashboardData }) {
   const unresolvedPools = data.prizePools.filter((row) => row.status === "UNRESOLVED");
   const total = unresolvedPools.reduce((sum, row) => sum + Number(row.amount), 0);
+  const activeSettlements = data.settlements.filter((row) => Number(row.current_amount) !== 0);
 
   return (
     <section className={cardClass()}>
-      <SectionTitle title="Prize pool" subtitle="Payments, distributions, and unresolved pools." />
+      <SectionTitle title="Prize pool" subtitle="Distributions and unresolved carry-over amounts." />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-[24px] bg-turf p-5 text-chalk">
           <p className="text-xs uppercase tracking-[0.2em] text-chalk/60">Total unresolved</p>
@@ -819,8 +905,8 @@ function PrizePoolCard({ data }: { data: DashboardData }) {
           <p className="mt-2 text-3xl font-black text-turf">{unresolvedPools.length}</p>
         </div>
         <div className="rounded-[24px] bg-amber-50 p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-amber-950/60">Payment rows</p>
-          <p className="mt-2 text-3xl font-black text-amber-900">{data.payments.length}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-amber-950/60">Active settlements</p>
+          <p className="mt-2 text-3xl font-black text-amber-900">{activeSettlements.length}</p>
         </div>
       </div>
       <div className="mt-4 space-y-3">
@@ -840,44 +926,152 @@ function PrizePoolCard({ data }: { data: DashboardData }) {
   );
 }
 
-function PaymentStatusTable({ data }: { data: DashboardData }) {
+function settlementBadgeClass(status: DashboardData["settlements"][number]["current_status"]) {
+  const map: Record<DashboardData["settlements"][number]["current_status"], string> = {
+    OPEN: "bg-amber-100 text-amber-900",
+    RECEIVE: "bg-emerald-100 text-emerald-900",
+    COLLECT: "bg-rose-100 text-rose-900",
+    ZERO: "bg-slate-100 text-slate-900"
+  };
+
+  return map[status];
+}
+
+function currentSettlementLabel(amount: number) {
+  if (amount > 0) {
+    return `To give ${currencyLabel(amount.toFixed(2))}`;
+  }
+
+  if (amount < 0) {
+    return `To collect ${currencyLabel(Math.abs(amount).toFixed(2))}`;
+  }
+
+  return "Settled";
+}
+
+function SettlementStatusTable({ data }: { data: DashboardData }) {
   if (data.member?.role !== "ADMIN") return null;
+  const rows = [...data.settlements].sort((a, b) => {
+    if (a.current_status === "OPEN" && b.current_status !== "OPEN") return -1;
+    if (a.current_status !== "OPEN" && b.current_status === "OPEN") return 1;
+    return a.rank - b.rank;
+  });
 
   return (
     <section className={cardClass()}>
-      <SectionTitle title="Payment status" subtitle="Admin can mark contributions as paid or waived." />
-      <div className="overflow-x-auto rounded-[24px] border border-emerald-900/10 bg-white/80">
-        <table className="min-w-[900px] w-full text-left text-sm">
+      <SectionTitle
+        title="Settlement status"
+        subtitle="Review each member's current balance, finalize it, then settle it once payment changes hands."
+      />
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-[24px] bg-emerald-50 p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-950/60">Members to settle</p>
+          <p className="mt-2 text-3xl font-black text-turf">
+            {rows.filter((row) => Number(row.current_amount) !== 0).length}
+          </p>
+        </div>
+        <div className="rounded-[24px] bg-amber-50 p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-amber-950/60">To give</p>
+          <p className="mt-2 text-3xl font-black text-amber-900">
+            {currencyLabel(
+              rows
+                .filter((row) => Number(row.current_amount) > 0)
+                .reduce((sum, row) => sum + Number(row.current_amount), 0)
+                .toFixed(2)
+            )}
+          </p>
+        </div>
+        <div className="rounded-[24px] bg-rose-50 p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-rose-950/60">To collect</p>
+          <p className="mt-2 text-3xl font-black text-rose-900">
+            {currencyLabel(
+              Math.abs(
+                rows
+                  .filter((row) => Number(row.current_amount) < 0)
+                  .reduce((sum, row) => sum + Number(row.current_amount), 0)
+              ).toFixed(2)
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto rounded-[24px] border border-emerald-900/10 bg-white/80">
+        <table className="min-w-[1100px] w-full text-left text-sm">
           <thead className="bg-emerald-50 text-xs uppercase tracking-[0.18em] text-emerald-950/60">
             <tr>
-              <th className="px-4 py-3">Fixture</th>
               <th className="px-4 py-3">Member</th>
-              <th className="px-4 py-3">Amount</th>
+              <th className="px-4 py-3">Points</th>
+              <th className="px-4 py-3">Winnings</th>
+              <th className="px-4 py-3">Fees</th>
+              <th className="px-4 py-3">Settled</th>
+              <th className="px-4 py-3">Current amount</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
-            {data.payments.map((row) => (
-              <tr key={`${row.match_id}-${row.member_id}`} className="border-t border-emerald-900/5">
-                <td className="px-4 py-3 text-turf">{row.match_label}</td>
-                <td className="px-4 py-3 text-turf">{row.member_name}</td>
-                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.amount)}</td>
-                <td className="px-4 py-3 text-turf">{row.payment_status}</td>
+            {rows.map((row) => {
+              const amount = Number(row.current_amount);
+              const isOpen = row.current_status === "OPEN";
+
+              return (
+              <tr key={row.member_id} className="border-t border-emerald-900/5">
                 <td className="px-4 py-3">
-                  <form action={updatePaymentStatus} className="flex items-center gap-2">
-                    <input type="hidden" name="match_id" value={row.match_id} />
-                    <input type="hidden" name="member_id" value={row.member_id} />
-                    <select name="payment_status" className="field py-2 text-xs" defaultValue={row.payment_status}>
-                      <option value="PENDING">Pending</option>
-                      <option value="PAID">Paid</option>
-                      <option value="WAIVED">Waived</option>
-                    </select>
-                    <button className="btn-secondary px-3 py-2 text-xs">Save</button>
-                  </form>
+                  <div className="font-semibold text-turf">{row.member_name}</div>
+                  <div className="text-xs text-emerald-950/60">{row.email}</div>
+                </td>
+                <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
+                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
+                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_fees)}</td>
+                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.settled_amount)}</td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-turf">{currentSettlementLabel(amount)}</div>
+                  {row.last_finalized_at ? (
+                    <div className="text-xs text-emerald-950/60">
+                      Finalized {formatNepalDateTime(row.last_finalized_at)}
+                    </div>
+                  ) : null}
+                  {row.last_settled_at ? (
+                    <div className="text-xs text-emerald-950/60">
+                      Settled {formatNepalDateTime(row.last_settled_at)}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`badge ${settlementBadgeClass(row.current_status)}`}>
+                    {row.current_status === "OPEN"
+                      ? "Open"
+                      : row.current_status === "RECEIVE"
+                        ? "Ready to give"
+                        : row.current_status === "COLLECT"
+                          ? "Ready to collect"
+                          : "Settled"}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  {isOpen ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <form action={settleMemberSettlement} className="flex items-center gap-2">
+                        <input type="hidden" name="settlement_id" value={row.open_settlement_id ?? ""} />
+                        <button className="btn-secondary px-3 py-2 text-xs">Settle</button>
+                      </form>
+                      <form action={undoMemberSettlementFinalization} className="flex items-center gap-2">
+                        <input type="hidden" name="settlement_id" value={row.open_settlement_id ?? ""} />
+                        <button className="btn-secondary px-3 py-2 text-xs">Undo finalize</button>
+                      </form>
+                    </div>
+                  ) : amount !== 0 ? (
+                    <form action={finalizeMemberSettlement} className="flex items-center gap-2">
+                      <input type="hidden" name="member_id" value={row.member_id} />
+                      <input type="hidden" name="settlement_scope" value="MANUAL" />
+                      <button className="btn-secondary px-3 py-2 text-xs">Finalize</button>
+                    </form>
+                  ) : (
+                    <span className="text-xs font-medium text-emerald-950/50">No action</span>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -885,12 +1079,58 @@ function PaymentStatusTable({ data }: { data: DashboardData }) {
   );
 }
 
-function PredictionAuditSection({ data }: { data: DashboardData }) {
+function PredictionIssueSection({ data }: { data: DashboardData }) {
   if (data.member?.role !== "ADMIN") return null;
+
+  const openIssues = data.predictionIssueReports.filter((issue) => issue.status === "OPEN");
+
+  if (openIssues.length === 0) {
+    return null;
+  }
 
   return (
     <section className={cardClass()}>
-      <SectionTitle title="Prediction audit" subtitle="Every save of a prediction is recorded here." />
+      <SectionTitle
+        title="Prediction issues"
+        subtitle="Shown while members have an open dispute or concern."
+      />
+      <div className="space-y-3">
+        {openIssues.map((issue) => (
+          <div key={issue.id} className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-950/60">
+                  {issue.match_label}
+                </p>
+                <h4 className="mt-1 font-bold text-amber-950">{issue.member_name}</h4>
+                <p className="mt-1 text-sm leading-6 text-amber-950/80">{issue.reason}</p>
+                <p className="mt-2 text-xs text-amber-950/60">
+                  Raised {formatNepalDateTime(issue.created_at)}
+                </p>
+              </div>
+              <form action={resolvePredictionIssue}>
+                <input type="hidden" name="issue_id" value={issue.id} />
+                <button className="btn-secondary">Resolve</button>
+              </form>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PredictionAuditSection({ data }: { data: DashboardData }) {
+  if (data.member?.role !== "ADMIN") return null;
+  const openIssues = data.predictionIssueReports.filter((issue) => issue.status === "OPEN");
+  if (openIssues.length === 0) return null;
+
+  return (
+    <section className={cardClass()}>
+      <SectionTitle
+        title="Prediction audit"
+        subtitle="Visible only while an issue is open and needs review."
+      />
       <div className="overflow-x-auto rounded-[24px] border border-emerald-900/10 bg-white/80">
         <table className="min-w-[980px] w-full text-left text-sm">
           <thead className="bg-emerald-50 text-xs uppercase tracking-[0.18em] text-emerald-950/60">
@@ -934,12 +1174,190 @@ function PredictionAuditSection({ data }: { data: DashboardData }) {
   );
 }
 
+function ResultUpdateSection({ data }: { data: DashboardData }) {
+  if (data.member?.role !== "ADMIN") return null;
+
+  const editableMatches = data.matches
+    .filter((match) => canUpdateMatchResult(match))
+    .sort((a, b) => {
+      if (a.result_locked !== b.result_locked) {
+        return a.result_locked ? 1 : -1;
+      }
+      return new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime();
+    });
+
+  return (
+    <section className={cardClass()}>
+      <SectionTitle
+        title="Result update"
+        subtitle="Set the result first, then lock it once you are sure."
+      />
+      <div className="space-y-4">
+        {editableMatches.length === 0 ? (
+          <p className="text-sm text-emerald-950/70">No matches are ready for result update yet.</p>
+        ) : (
+          editableMatches.map((match) => {
+            const locked = match.result_locked;
+            const homeDisabled = locked;
+            return (
+              <form
+                key={match.id}
+                action={finalizeMatchResult}
+                className="rounded-[24px] border border-emerald-900/10 bg-white/80 p-4"
+              >
+                <input type="hidden" name="match_id" value={match.id} />
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-950/60">
+                      {match.stage_name}
+                    </p>
+                    <h4 className="mt-1 font-bold text-turf">{matchLabel(match)}</h4>
+                    <p className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
+                      {match.home_team_name} vs {match.away_team_name}
+                    </p>
+                    <p className="mt-1 text-sm text-emerald-950/70">
+                      {match.status} • Kickoff {formatNepalDateTime(match.kickoff_at)}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
+                    <span className={`badge ${locked ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                      {locked ? "Result locked" : "Draft result"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <input
+                    name="home_score"
+                    type="number"
+                    min="0"
+                    placeholder="Home score"
+                    className="field"
+                    defaultValue={match.home_score ?? ""}
+                    disabled={homeDisabled}
+                    required
+                  />
+                  <input
+                    name="away_score"
+                    type="number"
+                    min="0"
+                    placeholder="Away score"
+                    className="field"
+                    defaultValue={match.away_score ?? ""}
+                    disabled={homeDisabled}
+                    required
+                  />
+                  <select
+                    name="actual_outcome"
+                    className="field"
+                    defaultValue={match.actual_outcome ?? ""}
+                    disabled={homeDisabled}
+                    required
+                  >
+                    <option value="">Actual outcome</option>
+                    <option value="HOME_WIN">Home win</option>
+                    <option value="AWAY_WIN">Away win</option>
+                    {match.stage_is_knockout ? null : <option value="DRAW">Draw</option>}
+                  </select>
+                  {match.stage_is_knockout ? (
+                    <>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name="went_extra_time"
+                          defaultChecked={Boolean(match.went_extra_time)}
+                          disabled={homeDisabled}
+                        />
+                        Extra time
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name="went_penalties"
+                          defaultChecked={Boolean(match.went_penalties)}
+                          disabled={homeDisabled}
+                        />
+                        Penalties
+                      </label>
+                      <input
+                        name="home_extra_score"
+                        type="number"
+                        min="0"
+                        placeholder="ET home"
+                        className="field"
+                        defaultValue={match.home_extra_score ?? ""}
+                        disabled={homeDisabled}
+                      />
+                      <input
+                        name="away_extra_score"
+                        type="number"
+                        min="0"
+                        placeholder="ET away"
+                        className="field"
+                        defaultValue={match.away_extra_score ?? ""}
+                        disabled={homeDisabled}
+                      />
+                      <select
+                        name="winner_team_id"
+                        className="field"
+                        defaultValue={match.winner_team_id ?? ""}
+                        disabled={homeDisabled}
+                      >
+                        <option value="">Winner team</option>
+                        <option value={match.home_team_id}>
+                          {match.home_team_short_name || match.home_team_name} - {match.home_team_name}
+                        </option>
+                        <option value={match.away_team_id}>
+                          {match.away_team_short_name || match.away_team_name} - {match.away_team_name}
+                        </option>
+                      </select>
+                      <select
+                        name="penalty_winner_team_id"
+                        className="field"
+                        defaultValue={match.penalty_winner_team_id ?? ""}
+                        disabled={homeDisabled}
+                      >
+                        <option value="">Penalty winner</option>
+                        <option value={match.home_team_id}>
+                          {match.home_team_short_name || match.home_team_name} - {match.home_team_name}
+                        </option>
+                        <option value={match.away_team_id}>
+                          {match.away_team_short_name || match.away_team_name} - {match.away_team_name}
+                        </option>
+                      </select>
+                    </>
+                  ) : null}
+                </div>
+
+                {locked ? (
+                  <p className="mt-3 text-sm font-medium text-emerald-950/70">
+                    This result is locked and cannot be changed.
+                  </p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button type="submit" name="submit_action" value="SAVE" className="btn-secondary">
+                      Save result
+                    </button>
+                    <button type="submit" name="submit_action" value="LOCK" className="btn-primary">
+                      Lock result
+                    </button>
+                  </div>
+                )}
+              </form>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AdminPanel({ data }: { data: DashboardData }) {
   if (data.member?.role !== "ADMIN") return null;
 
   const unresolvedPools = data.prizePools.filter((pool) => pool.status === "UNRESOLVED");
   const editableFixtures = data.matches.filter((match) => match.status === "SCHEDULED");
-  const lockedFixtures = data.matches.filter((match) => match.status !== "SCHEDULED");
 
   return (
     <section className={cardClass()}>
@@ -1084,98 +1502,6 @@ function AdminPanel({ data }: { data: DashboardData }) {
       </div>
 
       <div className="mt-5 rounded-[24px] bg-white/80 p-4">
-        <h4 className="font-bold text-turf">Fixture status</h4>
-        <div className="mt-4 space-y-3">
-          {lockedFixtures.length === 0 ? (
-            <p className="text-sm text-emerald-950/70">No locked, live, or completed fixtures yet.</p>
-          ) : (
-            lockedFixtures.map((match) => (
-              <div key={match.id} className="grid gap-3 rounded-[20px] bg-emerald-50 p-4 md:grid-cols-[1fr_auto]">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-950/60">
-                    {match.stage_name}
-                  </p>
-                  <h5 className="mt-1 font-bold text-turf">{matchLabel(match)}</h5>
-                  <p className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
-                    {match.home_team_name} vs {match.away_team_name}
-                  </p>
-                  <p className="mt-1 text-sm text-emerald-950/70">
-                    {match.status} • Kickoff {formatNepalDateTime(match.kickoff_at)}
-                  </p>
-                </div>
-                {match.status !== "COMPLETED" && match.status !== "CANCELLED" ? (
-                  <form action={cancelFixture}>
-                    <input type="hidden" name="match_id" value={match.id} />
-                    <button className="btn-secondary">Cancel match</button>
-                  </form>
-                ) : (
-                  <span className="badge bg-slate-200 text-slate-900">Read only</span>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        {data.matches
-          .filter((match) => match.status === "COMPLETED" || match.status === "LOCKED" || match.status === "LIVE")
-          .slice(0, 2)
-          .map((match) => (
-            <form key={`finalize-${match.id}`} action={finalizeMatchResult} className="rounded-[24px] bg-turf p-4 text-chalk">
-              <input type="hidden" name="match_id" value={match.id} />
-              <h4 className="font-bold">{matchLabel(match)}</h4>
-              <p className="mt-1 text-[11px] font-medium leading-4 text-chalk/70">
-                {match.home_team_name} vs {match.away_team_name}
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <input name="home_score" type="number" min="0" placeholder="Home score" className="field" required />
-                <input name="away_score" type="number" min="0" placeholder="Away score" className="field" required />
-                <select name="actual_outcome" className="field" defaultValue="">
-                  <option value="">Actual outcome</option>
-                  <option value="HOME_WIN">Home win</option>
-                  <option value="AWAY_WIN">Away win</option>
-                  {match.stage_is_knockout ? null : <option value="DRAW">Draw</option>}
-                </select>
-                {match.stage_is_knockout ? (
-                  <>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="went_extra_time" />
-                      Extra time
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="went_penalties" />
-                      Penalties
-                    </label>
-                    <input name="home_extra_score" type="number" min="0" placeholder="ET home" className="field" />
-                    <input name="away_extra_score" type="number" min="0" placeholder="ET away" className="field" />
-                    <select name="winner_team_id" className="field" defaultValue="">
-                      <option value="">Winner team</option>
-                      <option value={match.home_team_id}>
-                        {match.home_team_short_name || match.home_team_name} - {match.home_team_name}
-                      </option>
-                      <option value={match.away_team_id}>
-                        {match.away_team_short_name || match.away_team_name} - {match.away_team_name}
-                      </option>
-                    </select>
-                    <select name="penalty_winner_team_id" className="field" defaultValue="">
-                      <option value="">Penalty winner</option>
-                      <option value={match.home_team_id}>
-                        {match.home_team_short_name || match.home_team_name} - {match.home_team_name}
-                      </option>
-                      <option value={match.away_team_id}>
-                        {match.away_team_short_name || match.away_team_name} - {match.away_team_name}
-                      </option>
-                    </select>
-                  </>
-                ) : null}
-              </div>
-              <button className="btn-primary mt-3">Finalize result</button>
-            </form>
-          ))}
-      </div>
-
-      <div className="mt-5 rounded-[24px] bg-white/80 p-4">
         <h4 className="font-bold text-turf">Unresolved pools</h4>
         <div className="mt-3 space-y-3">
           {unresolvedPools.length === 0 ? (
@@ -1282,6 +1608,7 @@ export function DashboardShell({
             .slice(0, 4)}
           teams={data.teams}
           memberRole={data.member?.role ?? "MEMBER"}
+          predictionSummaries={data.predictionSummaries}
         />
 
         <LeaderboardCard data={data} />
@@ -1294,6 +1621,8 @@ export function DashboardShell({
                 match={match}
                 teams={data.teams}
                 memberRole={data.member?.role ?? "MEMBER"}
+                matchLeaderboards={data.matchLeaderboards}
+                predictionSummaries={data.predictionSummaries}
               />
             ))}
           </div>
@@ -1307,15 +1636,15 @@ export function DashboardShell({
       {data.member?.role === "ADMIN" ? (
         <section id="admin-work" className="mt-8 space-y-6">
           <section className={cardClass()}>
-            <SectionTitle title="Admin work" subtitle="Tools for results, payments, and logs." />
+            <SectionTitle title="Admin work" subtitle="Tools for results, settlements, and logs." />
             <p className="text-sm leading-6 text-emerald-950/70">
               Keep predictions above and admin tasks here, so the workflow stays separate.
             </p>
           </section>
-          <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-            <PaymentStatusTable data={data} />
-            <PredictionAuditSection data={data} />
-          </div>
+          <ResultUpdateSection data={data} />
+          <PredictionIssueSection data={data} />
+          <PredictionAuditSection data={data} />
+          <SettlementStatusTable data={data} />
           <AdminPanel data={data} />
         </section>
       ) : null}

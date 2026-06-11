@@ -77,6 +77,22 @@ export type MatchPredictionSummaryBlock = {
   rows: MatchPredictionSummaryRow[];
 };
 
+export type MatchLeaderboardRow = {
+  member_id: string;
+  full_name: string;
+  email: string;
+  total_points: number;
+  total_contributed: string;
+  total_winnings: string;
+  net_amount: string;
+  rank: number;
+};
+
+export type MatchLeaderboardBlock = {
+  match_id: string;
+  rows: MatchLeaderboardRow[];
+};
+
 export type CompletedMatchBreakdownBlock = {
   match_id: string;
   rows: MatchPredictionSummaryRow[];
@@ -96,6 +112,9 @@ export type MatchRow = {
   kickoff_at: string;
   lock_at: string;
   status: "SCHEDULED" | "LOCKED" | "LIVE" | "COMPLETED" | "CANCELLED";
+  result_locked: boolean;
+  result_locked_at: string | null;
+  result_locked_by: string | null;
   home_score: number | null;
   away_score: number | null;
   went_extra_time: boolean;
@@ -145,14 +164,23 @@ export type LeaderboardRow = {
   rank: number;
 };
 
-export type PaymentRow = {
-  match_id: string;
-  match_label: string;
+export type SettlementRow = {
   member_id: string;
   member_name: string;
-  amount: string;
-  payment_status: "PENDING" | "PAID" | "WAIVED";
-  stage_name: string;
+  email: string;
+  total_points: number;
+  total_winnings: string;
+  total_fees: string;
+  settled_amount: string;
+  open_settlement_id: string | null;
+  open_settlement_scope: "WEEKLY" | "STAGE" | "MANUAL" | null;
+  open_settlement_label: string | null;
+  open_settlement_amount: string | null;
+  current_amount: string;
+  current_status: "OPEN" | "RECEIVE" | "COLLECT" | "ZERO";
+  last_finalized_at: string | null;
+  last_settled_at: string | null;
+  rank: number;
 };
 
 export type PrizePoolRow = {
@@ -177,6 +205,19 @@ export type PredictionAuditRow = {
   after_payload: Record<string, unknown> | null;
 };
 
+export type PredictionIssueRow = {
+  id: string;
+  match_id: string;
+  match_label: string;
+  member_id: string;
+  member_name: string;
+  reason: string;
+  status: "OPEN" | "RESOLVED";
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by_name: string | null;
+};
+
 export type DashboardData = {
   member: Member | null;
   groups: GroupRow[];
@@ -186,11 +227,13 @@ export type DashboardData = {
   upcomingMatch: MatchRow | null;
   groupStandings: GroupStandingRow[];
   predictionSummaries: MatchPredictionSummaryBlock[];
+  matchLeaderboards: MatchLeaderboardBlock[];
   completedBreakdowns: CompletedMatchBreakdownBlock[];
   leaderboard: LeaderboardRow[];
-  payments: PaymentRow[];
+  settlements: SettlementRow[];
   prizePools: PrizePoolRow[];
   predictionAuditLogs: PredictionAuditRow[];
+  predictionIssueReports: PredictionIssueRow[];
 };
 
 export async function syncExpiredMatches() {
@@ -225,6 +268,13 @@ export async function fetchCompletedMatchBreakdown(matchId: string) {
   return rows;
 }
 
+export async function fetchMatchLeaderboard(matchId: string) {
+  const rows = await typedSql<MatchLeaderboardRow>`
+    select * from get_match_leaderboard(${matchId})
+  `;
+  return rows;
+}
+
 export async function fetchPredictionAuditLogs(limit = 20) {
   const rows = await typedSql<PredictionAuditRow>`
     select
@@ -250,6 +300,31 @@ export async function fetchPredictionAuditLogs(limit = 20) {
   return rows;
 }
 
+export async function fetchPredictionIssueReports() {
+  const rows = await typedSql<PredictionIssueRow>`
+    select
+      pir.id,
+      pir.match_id,
+      concat(ht.short_name, ' vs ', at.short_name, ' ', s.code) as match_label,
+      pir.member_id,
+      m.full_name as member_name,
+      pir.reason,
+      pir.status,
+      pir.created_at::text as created_at,
+      pir.resolved_at::text as resolved_at,
+      rm.full_name as resolved_by_name
+    from prediction_issue_reports pir
+    join matches mm on mm.id = pir.match_id
+    join stages s on s.id = mm.stage_id
+    join teams ht on ht.id = mm.home_team_id
+    join teams at on at.id = mm.away_team_id
+    join members m on m.id = pir.member_id
+    left join members rm on rm.id = pir.resolved_by
+    order by pir.created_at desc
+  `;
+  return rows;
+}
+
 export async function fetchDashboardData(): Promise<DashboardData> {
   const member = await getCurrentMember();
 
@@ -263,17 +338,19 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       upcomingMatch: null,
       groupStandings: [],
       predictionSummaries: [],
+      matchLeaderboards: [],
       completedBreakdowns: [],
       leaderboard: [],
-      payments: [],
+      settlements: [],
       prizePools: [],
-      predictionAuditLogs: []
+      predictionAuditLogs: [],
+      predictionIssueReports: []
     };
   }
 
   await syncExpiredMatches();
 
-  const [groups, stages, teams, matches, leaderboard, payments, prizePools, groupStandings, predictionAuditLogs] =
+  const [groups, stages, teams, matches, leaderboard, settlements, prizePools, groupStandings, predictionAuditLogs, predictionIssueReports] =
     await Promise.all([
     typedSql<GroupRow>`
       select id, code, name, sort_order
@@ -296,6 +373,9 @@ export async function fetchDashboardData(): Promise<DashboardData> {
         m.kickoff_at::text,
         m.lock_at::text,
         m.status,
+        m.result_locked,
+        m.result_locked_at::text as result_locked_at,
+        m.result_locked_by,
         m.home_score,
         m.away_score,
         m.went_extra_time,
@@ -342,23 +422,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       order by m.kickoff_at asc, s.sort_order asc, m.created_at asc
     `,
     typedSql<LeaderboardRow>`select * from get_leaderboard()`,
-    typedSql<PaymentRow>`
-      select
-        c.match_id,
-        concat(ht.short_name, ' vs ', at.short_name, ' ', s.code) as match_label,
-        c.member_id,
-        m.full_name as member_name,
-        c.amount::text as amount,
-        c.payment_status,
-        s.name as stage_name
-      from contributions c
-      join matches mm on mm.id = c.match_id
-      join stages s on s.id = mm.stage_id
-      join teams ht on ht.id = mm.home_team_id
-      join teams at on at.id = mm.away_team_id
-      join members m on m.id = c.member_id
-      order by mm.kickoff_at asc, m.full_name asc
-    `,
+    typedSql<SettlementRow>`select * from get_member_settlement_statuses()`,
     typedSql<PrizePoolRow>`
       select
         up.id,
@@ -374,15 +438,23 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       join teams at on at.id = mm.away_team_id
       order by up.created_at desc
     `,
-      typedSql<GroupStandingRow>`select * from get_group_standings()`
+    typedSql<GroupStandingRow>`select * from get_group_standings()`
     ,
-    member.role === "ADMIN" ? fetchPredictionAuditLogs(25) : Promise.resolve([] as PredictionAuditRow[])
+    member.role === "ADMIN" ? fetchPredictionAuditLogs(25) : Promise.resolve([] as PredictionAuditRow[]),
+    member.role === "ADMIN" ? fetchPredictionIssueReports() : Promise.resolve([] as PredictionIssueRow[])
     ]);
 
   const predictionSummaries = await Promise.all(
     matches.map(async (match) => ({
       match_id: match.id,
       rows: await fetchMatchPredictionSummary(match.id, member.id)
+    }))
+  );
+
+  const matchLeaderboards = await Promise.all(
+    matches.map(async (match) => ({
+      match_id: match.id,
+      rows: await fetchMatchLeaderboard(match.id)
     }))
   );
 
@@ -409,10 +481,12 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     upcomingMatch,
     groupStandings,
     predictionSummaries,
+    matchLeaderboards,
     completedBreakdowns,
     leaderboard,
-    payments,
+    settlements,
     prizePools,
-    predictionAuditLogs
+    predictionAuditLogs,
+    predictionIssueReports
   };
 }
