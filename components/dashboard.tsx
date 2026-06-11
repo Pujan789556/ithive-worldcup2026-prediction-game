@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { Countdown } from "./countdown";
 import {
   cancelFixture,
@@ -28,14 +27,88 @@ function cardClass(extra = "") {
 }
 
 function matchLabel(match: MatchRow) {
-  const home = match.home_team_short_name || match.home_team_name;
-  const away = match.away_team_short_name || match.away_team_name;
+  const home = `${match.home_team_flag_emoji ?? ""} ${match.home_team_short_name || match.home_team_name}`.trim();
+  const away = `${match.away_team_flag_emoji ?? ""} ${match.away_team_short_name || match.away_team_name}`.trim();
   return `${home} vs ${away}`;
 }
 
 function teamLabel(teams: Team[], teamId: string | null) {
   if (!teamId) return "Hidden";
-  return teams.find((team) => team.id === teamId)?.short_name || teams.find((team) => team.id === teamId)?.name || "TBD";
+  const team = teams.find((entry) => entry.id === teamId) ?? null;
+  const name = team?.short_name || team?.name || "TBD";
+  return `${team?.flag_emoji ?? ""} ${name}`.trim();
+}
+
+function compactTeamLabel(team: Team | null) {
+  if (!team) return "TBD";
+  return team.short_name || team.name || "TBD";
+}
+
+function teamLabelParts(team: Team | null) {
+  if (!team) {
+    return {
+      emoji: "",
+      shortName: "TBD",
+      fullName: "TBD"
+    };
+  }
+
+  return {
+    emoji: team.flag_emoji ?? "",
+    shortName: team.short_name || team.name || "TBD",
+    fullName: team.name || team.short_name || "TBD"
+  };
+}
+
+function TeamLabelStack({ team, align = "left" }: { team: Team | null; align?: "left" | "center" }) {
+  const parts = teamLabelParts(team);
+  const alignClass = align === "center" ? "items-center text-center" : "items-start text-left";
+
+  return (
+    <span className={`flex flex-col ${alignClass}`}>
+      <span className="text-sm font-black leading-tight">
+        {parts.emoji ? `${parts.emoji} ` : ""}
+        {parts.shortName}
+      </span>
+      {parts.fullName !== parts.shortName ? (
+        <span className="text-[11px] font-medium leading-4 text-emerald-950/60">
+          {parts.fullName}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function formatNepalDateTime(iso: string) {
+  return new Intl.DateTimeFormat("en-NP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kathmandu"
+  }).format(new Date(iso));
+}
+
+function predictionSummaryText(match: MatchRow, teams: Team[]) {
+  if (!match.prediction_id) {
+    return null;
+  }
+
+  const home = compactTeamLabel(teams.find((team) => team.id === match.home_team_id) ?? null);
+  const away = compactTeamLabel(teams.find((team) => team.id === match.away_team_id) ?? null);
+
+  if (match.stage_is_knockout) {
+    const winner = compactTeamLabel(teams.find((team) => team.id === match.predicted_winner_team_id) ?? null);
+    const score =
+      match.predicted_home_score !== null && match.predicted_away_score !== null
+        ? ` (${match.predicted_home_score}-${match.predicted_away_score})`
+        : "";
+    return `${winner}${score}`;
+  }
+
+  if (match.predicted_home_score === null || match.predicted_away_score === null) {
+    return `${home} vs ${away}`;
+  }
+
+  return `${home} ${match.predicted_home_score}-${match.predicted_away_score} ${away}`;
 }
 
 function predictionLabel(value: MatchRow["predicted_outcome"] | null) {
@@ -246,17 +319,15 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 }
 
 function UpcomingMatchCard({
-  match,
+  matches,
   teams,
-  memberRole,
-  predictionRows
+  memberRole
 }: {
-  match: MatchRow | null;
+  matches: MatchRow[];
   teams: Team[];
   memberRole: "ADMIN" | "MEMBER";
-  predictionRows: MatchPredictionSummaryBlock["rows"];
 }) {
-  if (!match) {
+  if (matches.length === 0) {
     return (
       <section className={cardClass()}>
         <SectionTitle title="Today / upcoming matches" subtitle="Nothing scheduled yet." />
@@ -264,47 +335,101 @@ function UpcomingMatchCard({
     );
   }
 
-  const isKnockout = match.stage_is_knockout;
-  const locked = match.status !== "SCHEDULED";
-
   return (
     <section className={cardClass()}>
-      <SectionTitle
-        title="Today / upcoming matches"
-        subtitle="Next fixture and prediction shortcut."
-      />
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-950/70">
-        <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
-        <span className="badge bg-emerald-100 text-emerald-900">{match.stage_name}</span>
-        {locked ? null : (
-          <span className="badge bg-amber-100 text-amber-900">
-            Locks in <Countdown targetIso={match.lock_at} />
-          </span>
-        )}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <SectionTitle
+          title="Today / upcoming matches"
+          subtitle="Next four fixtures in Nepal time."
+        />
+        <a
+          href="#match-list"
+          className="rounded-2xl border border-emerald-900/10 bg-white px-4 py-2 text-sm font-semibold text-turf transition hover:bg-emerald-50"
+        >
+          Go to match list
+        </a>
       </div>
-      <div className="grid gap-5 md:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-[24px] bg-[#0e3b2d] p-5 text-chalk">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-chalk/60">Fixture</p>
-              <h4 className="mt-2 text-3xl font-black">{matchLabel(match)}</h4>
-            </div>
-            <div className="text-right">
-              <p className="text-xs uppercase tracking-[0.25em] text-chalk/60">Kickoff</p>
-              <p className="mt-2 text-lg font-bold">
-                {format(new Date(match.kickoff_at), "EEE, MMM d • h:mm a")}
-              </p>
-            </div>
-          </div>
-          <p className="mt-4 text-sm leading-6 text-chalk/80">
-            {isKnockout
-              ? "Knockout: pick the winner and score, plus extra time or penalties if needed."
-              : "Group stage: pick the result and regular-time score."}
-          </p>
-        </div>
-        <PredictionForm match={match} teams={teams} memberRole={memberRole} />
+      <div className="flex flex-col gap-3 xl:flex-row">
+        {matches.map((match, index) => {
+          const homeTeam = teams.find((team) => team.id === match.home_team_id) ?? null;
+          const awayTeam = teams.find((team) => team.id === match.away_team_id) ?? null;
+          const isNext = index === 0;
+          const locked = match.status !== "SCHEDULED";
+          return (
+            <article
+              key={match.id}
+              className={`min-w-0 flex-1 rounded-[22px] border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                isNext
+                  ? "border-turf/20 bg-white text-turf ring-2 ring-turf/10"
+                  : "border-emerald-900/10 bg-white/90 text-turf"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-950/55">
+                    {match.stage_name}
+                  </p>
+                  <h4 className="mt-1 break-words text-base font-black leading-tight text-turf">
+                    {matchLabel(match)}
+                  </h4>
+                  <p className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
+                    {match.home_team_name} vs {match.away_team_name}
+                  </p>
+                </div>
+                <span className={`badge shrink-0 ${badgeForStatus(match.status)}`}>{match.status}</span>
+              </div>
+
+              <div className="mt-3 grid gap-2 text-sm text-emerald-950/80">
+                <div className="rounded-2xl bg-emerald-50 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-950/55">
+                    Kickoff
+                  </p>
+                  <p className="mt-1 text-sm font-bold">{formatNepalDateTime(match.kickoff_at)}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl bg-emerald-50 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-950/55">
+                      Home
+                    </p>
+                    <div className="mt-1">
+                      <TeamLabelStack team={homeTeam} />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-emerald-50 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-950/55">
+                      Away
+                    </p>
+                    <div className="mt-1">
+                      <TeamLabelStack team={awayTeam} />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs leading-5 text-emerald-950/70">
+                  {locked ? (
+                    "Locked or live."
+                  ) : (
+                    <>
+                      Locks in <Countdown targetIso={match.lock_at} />
+                    </>
+                  )}
+                </p>
+                {match.status === "SCHEDULED" ? (
+                  <details className="mt-1 rounded-2xl border border-amber-900/15 bg-amber-50 p-3">
+                    <summary className="cursor-pointer list-none rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-amber-950 transition hover:bg-amber-50">
+                      {match.prediction_id
+                        ? `Already predicted${predictionSummaryText(match, teams) ? `: ${predictionSummaryText(match, teams)}` : ""}`
+                        : "Predict this"}
+                    </summary>
+                    <div className="mt-3">
+                      <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
       </div>
-      <PredictionVisibilityPanel match={match} teams={teams} rows={predictionRows} />
     </section>
   );
 }
@@ -451,7 +576,7 @@ function MatchCard({
           </p>
           <h4 className="mt-1 truncate text-base font-black text-turf">{matchLabel(match)}</h4>
           <p className="mt-1 text-sm text-emerald-950/65">
-            {format(new Date(match.kickoff_at), "EEE, MMM d • h:mm a")}
+            {formatNepalDateTime(match.kickoff_at)}
           </p>
         </div>
         <span className={`badge shrink-0 ${badgeForStatus(match.status)}`}>{match.status}</span>
@@ -477,9 +602,14 @@ function MatchCard({
       </p>
 
       {match.status === "SCHEDULED" ? (
-        <details className="mt-4 rounded-[20px] border border-emerald-900/10 bg-emerald-50/70 p-3">
+        <details
+          className="mt-4 rounded-[20px] border border-emerald-900/10 bg-emerald-50/70 p-3"
+          open={Boolean(match.prediction_id)}
+        >
           <summary className="cursor-pointer list-none text-sm font-semibold text-turf">
-            Make prediction
+            {match.prediction_id
+              ? `Already predicted${predictionSummaryText(match, teams) ? `: ${predictionSummaryText(match, teams)}` : ""}`
+              : "Make prediction"}
           </summary>
           <div className="mt-3">
             <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
@@ -633,8 +763,18 @@ function GroupStandingsSection({ data }: { data: DashboardData }) {
                     {rows.map((row) => (
                       <tr key={row.team_id} className="border-t border-emerald-900/5">
                         <td className="px-2 py-2 font-semibold text-turf">{row.standing_position}</td>
-                        <td className="px-2 py-2 font-semibold text-turf">
-                          {row.short_name || row.team_name}
+                        <td className="px-2 py-2 text-base font-black text-turf">
+                          <span className="flex flex-col">
+                            <span className="text-sm font-black leading-tight">
+                              {row.flag_emoji ? `${row.flag_emoji} ` : ""}
+                              {row.short_name || row.team_name}
+                            </span>
+                            {row.team_name !== (row.short_name || row.team_name) ? (
+                              <span className="text-[11px] font-medium leading-4 text-emerald-950/60">
+                                {row.team_name}
+                              </span>
+                            ) : null}
+                          </span>
                         </td>
                         <td className="px-2 py-2">{row.played}</td>
                         <td className="px-2 py-2">{row.won}</td>
@@ -767,7 +907,7 @@ function PredictionAuditSection({ data }: { data: DashboardData }) {
             ) : (
               data.predictionAuditLogs.map((row) => (
                 <tr key={row.id} className="border-t border-emerald-900/5">
-                  <td className="px-4 py-3 text-turf">{format(new Date(row.created_at), "MMM d • h:mm a")}</td>
+                  <td className="px-4 py-3 text-turf">{formatNepalDateTime(row.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="font-semibold text-turf">{row.member_name}</div>
                     <div className="text-xs text-emerald-950/65">{row.member_id}</div>
@@ -818,7 +958,7 @@ function AdminPanel({ data }: { data: DashboardData }) {
               <option value="">Home team</option>
               {data.teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.short_name || team.name}
+                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
                 </option>
               ))}
             </select>
@@ -826,7 +966,7 @@ function AdminPanel({ data }: { data: DashboardData }) {
               <option value="">Away team</option>
               {data.teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.short_name || team.name}
+                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
                 </option>
               ))}
             </select>
@@ -907,14 +1047,14 @@ function AdminPanel({ data }: { data: DashboardData }) {
                 <select name="home_team_id" className="field" defaultValue={match.home_team_id} required>
                   {data.teams.map((team) => (
                     <option key={team.id} value={team.id}>
-                      {team.short_name || team.name}
+                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
                     </option>
                   ))}
                 </select>
                 <select name="away_team_id" className="field" defaultValue={match.away_team_id} required>
                   {data.teams.map((team) => (
                     <option key={team.id} value={team.id}>
-                      {team.short_name || team.name}
+                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
                     </option>
                   ))}
                 </select>
@@ -951,8 +1091,11 @@ function AdminPanel({ data }: { data: DashboardData }) {
                     {match.stage_name}
                   </p>
                   <h5 className="mt-1 font-bold text-turf">{matchLabel(match)}</h5>
+                  <p className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
+                    {match.home_team_name} vs {match.away_team_name}
+                  </p>
                   <p className="mt-1 text-sm text-emerald-950/70">
-                    {match.status} • Kickoff {format(new Date(match.kickoff_at), "EEE, MMM d • h:mm a")}
+                    {match.status} • Kickoff {formatNepalDateTime(match.kickoff_at)}
                   </p>
                 </div>
                 {match.status !== "COMPLETED" && match.status !== "CANCELLED" ? (
@@ -977,6 +1120,9 @@ function AdminPanel({ data }: { data: DashboardData }) {
             <form key={`finalize-${match.id}`} action={finalizeMatchResult} className="rounded-[24px] bg-turf p-4 text-chalk">
               <input type="hidden" name="match_id" value={match.id} />
               <h4 className="font-bold">{matchLabel(match)}</h4>
+              <p className="mt-1 text-[11px] font-medium leading-4 text-chalk/70">
+                {match.home_team_name} vs {match.away_team_name}
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <input name="home_score" type="number" min="0" placeholder="Home score" className="field" required />
                 <input name="away_score" type="number" min="0" placeholder="Away score" className="field" required />
@@ -1001,19 +1147,19 @@ function AdminPanel({ data }: { data: DashboardData }) {
                     <select name="winner_team_id" className="field" defaultValue="">
                       <option value="">Winner team</option>
                       <option value={match.home_team_id}>
-                        {match.home_team_short_name || match.home_team_name}
+                        {match.home_team_short_name || match.home_team_name} - {match.home_team_name}
                       </option>
                       <option value={match.away_team_id}>
-                        {match.away_team_short_name || match.away_team_name}
+                        {match.away_team_short_name || match.away_team_name} - {match.away_team_name}
                       </option>
                     </select>
                     <select name="penalty_winner_team_id" className="field" defaultValue="">
                       <option value="">Penalty winner</option>
                       <option value={match.home_team_id}>
-                        {match.home_team_short_name || match.home_team_name}
+                        {match.home_team_short_name || match.home_team_name} - {match.home_team_name}
                       </option>
                       <option value={match.away_team_id}>
-                        {match.away_team_short_name || match.away_team_name}
+                        {match.away_team_short_name || match.away_team_name} - {match.away_team_name}
                       </option>
                     </select>
                   </>
@@ -1068,15 +1214,6 @@ function AdminPanel({ data }: { data: DashboardData }) {
   );
 }
 
-function rowsForMatch(data: DashboardData, matchId: string) {
-  const completed = data.completedBreakdowns.find((block) => block.match_id === matchId);
-  if (completed) {
-    return completed.rows;
-  }
-
-  return data.predictionSummaries.find((block) => block.match_id === matchId)?.rows ?? [];
-}
-
 function AdminWorkspaceMenu() {
   return (
     <nav className="mb-6 flex flex-wrap gap-2 rounded-[24px] border border-emerald-900/10 bg-white/80 p-2 shadow-sm">
@@ -1116,25 +1253,22 @@ export function DashboardShell({
             Prediction could not be saved. Please check the match is still scheduled and try again.
           </div>
         ) : null}
-        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
-          <UpcomingMatchCard
-            match={data.upcomingMatch}
-            teams={data.teams}
-            memberRole={data.member?.role ?? "MEMBER"}
-            predictionRows={data.upcomingMatch ? rowsForMatch(data, data.upcomingMatch.id) : []}
-          />
-          <div className="space-y-6">
-            <LeaderboardCard data={data} />
-            <AccountCard member={data.member} errorMessage={profileError} />
-          </div>
-        </div>
+        <UpcomingMatchCard
+          matches={data.matches
+            .filter((match) => match.status !== "COMPLETED" && match.status !== "CANCELLED")
+            .slice(0, 4)}
+          teams={data.teams}
+          memberRole={data.member?.role ?? "MEMBER"}
+        />
+
+        <LeaderboardCard data={data} />
 
         <div className="mt-6">
           <GroupStandingsSection data={data} />
         </div>
 
         <div className="mt-6 grid gap-6">
-          <section className={cardClass()}>
+          <section id="match-list" className={cardClass()}>
             <SectionTitle title="Match list" subtitle="All fixtures at a glance." />
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {data.matches.map((match) => (

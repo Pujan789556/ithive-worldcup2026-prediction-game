@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 
 type Outcome = "HOME_WIN" | "DRAW" | "AWAY_WIN";
+type TeamDisplay = {
+  emoji: string;
+  shortName: string;
+  fullName: string;
+};
 
 function outcomeFromScores(homeScore: number | "", awayScore: number | ""): Outcome | null {
   if (homeScore === "" || awayScore === "") {
@@ -22,7 +27,7 @@ function outcomeFromScores(homeScore: number | "", awayScore: number | ""): Outc
 
 function pillClass(active: boolean) {
   return `rounded-2xl border px-3 py-3 text-center text-sm font-semibold transition ${
-    active ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-emerald-900/10 bg-white text-turf"
+    active ? "border-amber-600 bg-amber-50 text-amber-950" : "border-emerald-900/10 bg-white text-turf"
   }`;
 }
 
@@ -31,14 +36,14 @@ function scoreValue(value: number | "") {
 }
 
 export function PredictionOutcomePreview({
-  homeLabel,
-  awayLabel,
+  homeTeam,
+  awayTeam,
   defaultHomeScore,
   defaultAwayScore,
   disabled = false
 }: {
-  homeLabel: string;
-  awayLabel: string;
+  homeTeam: TeamDisplay;
+  awayTeam: TeamDisplay;
   defaultHomeScore: number | null;
   defaultAwayScore: number | null;
   disabled?: boolean;
@@ -51,9 +56,25 @@ export function PredictionOutcomePreview({
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2">
-        <div className={pillClass(outcome === "HOME_WIN")}>{homeLabel}</div>
+        <div className={pillClass(outcome === "HOME_WIN")}>
+          <div className="text-3xl leading-none">{homeTeam.emoji}</div>
+          <div className="mt-1 text-sm font-black">{homeTeam.shortName}</div>
+          {homeTeam.fullName !== homeTeam.shortName ? (
+            <div className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
+              {homeTeam.fullName}
+            </div>
+          ) : null}
+        </div>
         <div className={pillClass(outcome === "DRAW")}>Draw</div>
-        <div className={pillClass(outcome === "AWAY_WIN")}>{awayLabel}</div>
+        <div className={pillClass(outcome === "AWAY_WIN")}>
+          <div className="text-3xl leading-none">{awayTeam.emoji}</div>
+          <div className="mt-1 text-sm font-black">{awayTeam.shortName}</div>
+          {awayTeam.fullName !== awayTeam.shortName ? (
+            <div className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
+              {awayTeam.fullName}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <input type="hidden" name="predicted_outcome" value={outcome ?? ""} />
