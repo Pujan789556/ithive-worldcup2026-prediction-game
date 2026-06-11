@@ -9,13 +9,13 @@ import {
   finalizeMatchResult,
   loginWithPassword,
   logout,
-  submitPrediction,
   syncLocks,
   updateFixture,
   updatePaymentStatus,
   updateUnresolvedPool,
   updateStageAmount
 } from "@/app/actions";
+import { PredictionFormClient } from "./prediction-form-client";
 import type {
   DashboardData,
   MatchPredictionSummaryBlock,
@@ -320,163 +320,14 @@ function PredictionForm({
   memberRole: "ADMIN" | "MEMBER";
   compact?: boolean;
 }) {
-  const homeTeam = teams.find((team) => team.id === match.home_team_id) ?? null;
-  const awayTeam = teams.find((team) => team.id === match.away_team_id) ?? null;
-  const disabled = match.status !== "SCHEDULED";
-  const hideOwnDefaults = memberRole === "ADMIN" && match.status === "SCHEDULED";
-  const currentWinner =
-    match.predicted_winner_team_id === match.home_team_id
-      ? "home"
-      : match.predicted_winner_team_id === match.away_team_id
-        ? "away"
-        : "";
-
   return (
-    <form action={submitPrediction} className={compact ? "space-y-3" : cardClass("space-y-4")}>
-      <input type="hidden" name="match_id" value={match.id} />
-      <input type="hidden" name="stage_code" value={match.stage_code} />
-      <div className="space-y-2">
-        <label className="text-sm font-semibold text-turf">My prediction</label>
-        {match.stage_is_knockout ? (
-          <select
-            name="predicted_winner_team_id"
-            className="field"
-            defaultValue={
-              hideOwnDefaults
-                ? ""
-                : currentWinner === "home"
-                  ? match.home_team_id
-                  : currentWinner === "away"
-                    ? match.away_team_id
-                    : ""
-            }
-            disabled={disabled}
-            required
-          >
-            <option value="">Choose winner</option>
-            <option value={match.home_team_id}>{homeTeam?.short_name || homeTeam?.name}</option>
-            <option value={match.away_team_id}>{awayTeam?.short_name || awayTeam?.name}</option>
-          </select>
-        ) : (
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: "Home win", value: "HOME_WIN" },
-              { label: "Draw", value: "DRAW" },
-              { label: "Away win", value: "AWAY_WIN" }
-            ].map((option) => (
-              <label
-                key={option.value}
-                className={`flex cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
-                  match.predicted_outcome === option.value
-                    ? "border-emerald-700 bg-emerald-50 text-emerald-900"
-                    : "border-emerald-900/10 bg-white text-turf"
-                } ${disabled ? "pointer-events-none opacity-50" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="predicted_outcome"
-                  value={option.value}
-                  defaultChecked={hideOwnDefaults ? false : match.predicted_outcome === option.value}
-                  className="sr-only"
-                  disabled={disabled}
-                  required
-                />
-                {option.label}
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/70">
-            Home goals
-          </label>
-          <input
-            type="number"
-            min="0"
-            name="predicted_home_score"
-            defaultValue={hideOwnDefaults ? "" : match.predicted_home_score ?? ""}
-            className="field"
-            disabled={disabled}
-            required
-          />
-        </div>
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/70">
-            Away goals
-          </label>
-          <input
-            type="number"
-            min="0"
-            name="predicted_away_score"
-            defaultValue={hideOwnDefaults ? "" : match.predicted_away_score ?? ""}
-            className="field"
-            disabled={disabled}
-            required
-          />
-        </div>
-      </div>
-
-      {match.stage_is_knockout ? (
-        <div className="space-y-4 rounded-[24px] bg-emerald-50 p-4">
-          <label className="flex items-center gap-3 text-sm font-semibold text-turf">
-            <input
-              type="checkbox"
-              name="predicts_extra_time"
-              defaultChecked={Boolean(match.predicts_extra_time)}
-              disabled={disabled}
-            />
-            Goes to extra time
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="number"
-              min="0"
-              placeholder="ET home"
-              name="predicted_home_extra_score"
-              defaultValue={hideOwnDefaults ? "" : match.predicted_home_extra_score ?? ""}
-              className="field"
-              disabled={disabled}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="ET away"
-              name="predicted_away_extra_score"
-              defaultValue={hideOwnDefaults ? "" : match.predicted_away_extra_score ?? ""}
-              className="field"
-              disabled={disabled}
-            />
-          </div>
-          <label className="flex items-center gap-3 text-sm font-semibold text-turf">
-            <input
-            type="checkbox"
-            name="predicts_penalties"
-            defaultChecked={hideOwnDefaults ? false : Boolean(match.predicts_penalties)}
-            disabled={disabled}
-          />
-            Goes to penalties
-          </label>
-          <select
-            name="predicted_penalty_winner_team_id"
-            className="field"
-            defaultValue={hideOwnDefaults ? "" : match.predicted_penalty_winner_team_id ?? ""}
-            disabled={disabled}
-          >
-            <option value="">Penalty winner</option>
-            <option value={match.home_team_id}>{homeTeam?.short_name || homeTeam?.name}</option>
-            <option value={match.away_team_id}>{awayTeam?.short_name || awayTeam?.name}</option>
-          </select>
-        </div>
-      ) : null}
-
-      <button type="submit" className="btn-primary w-full" disabled={disabled}>
-        {match.prediction_id && !hideOwnDefaults ? "Update prediction" : "Submit prediction"}
-      </button>
-      <p className="text-xs leading-5 text-emerald-950/70">Locks 30 minutes before kickoff.</p>
-    </form>
+    <PredictionFormClient
+      match={match}
+      teams={teams}
+      memberRole={memberRole}
+      compact={compact}
+      initialHasPrediction={Boolean(match.prediction_id)}
+    />
   );
 }
 
@@ -1226,57 +1077,95 @@ function rowsForMatch(data: DashboardData, matchId: string) {
   return data.predictionSummaries.find((block) => block.match_id === matchId)?.rows ?? [];
 }
 
+function AdminWorkspaceMenu() {
+  return (
+    <nav className="mb-6 flex flex-wrap gap-2 rounded-[24px] border border-emerald-900/10 bg-white/80 p-2 shadow-sm">
+      <a
+        href="#predictions"
+        className="rounded-2xl bg-turf px-4 py-3 text-sm font-semibold text-chalk transition hover:opacity-90"
+      >
+        Predictions
+      </a>
+      <a
+        href="#admin-work"
+        className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-turf transition hover:bg-emerald-100"
+      >
+        Admin work
+      </a>
+    </nav>
+  );
+}
+
 export function DashboardShell({
   data,
-  profileError
+  profileError,
+  predictionError
 }: {
   data: DashboardData;
   profileError?: string | null;
+  predictionError?: string | null;
 }) {
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 lg:px-8">
       <TopHeader data={data} />
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
-        <UpcomingMatchCard
-          match={data.upcomingMatch}
-          teams={data.teams}
-          memberRole={data.member?.role ?? "MEMBER"}
-          predictionRows={data.upcomingMatch ? rowsForMatch(data, data.upcomingMatch.id) : []}
-        />
-        <div className="space-y-6">
-          <LeaderboardCard data={data} />
-          <AccountCard member={data.member} errorMessage={profileError} />
-        </div>
-      </div>
+      {data.member?.role === "ADMIN" ? <AdminWorkspaceMenu /> : null}
 
-      <div className="mt-6">
-        <GroupStandingsSection data={data} />
-      </div>
-
-      <div className="mt-6 grid gap-6">
-        <section className={cardClass()}>
-          <SectionTitle title="Match list" subtitle="All fixtures at a glance." />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {data.matches.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                teams={data.teams}
-                memberRole={data.member?.role ?? "MEMBER"}
-              />
-            ))}
+      <section id="predictions" className="space-y-6">
+        {predictionError ? (
+          <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900">
+            Prediction could not be saved. Please check the match is still scheduled and try again.
           </div>
-        </section>
-        <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-          <PrizePoolCard data={data} />
-          <PaymentStatusTable data={data} />
+        ) : null}
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
+          <UpcomingMatchCard
+            match={data.upcomingMatch}
+            teams={data.teams}
+            memberRole={data.member?.role ?? "MEMBER"}
+            predictionRows={data.upcomingMatch ? rowsForMatch(data, data.upcomingMatch.id) : []}
+          />
+          <div className="space-y-6">
+            <LeaderboardCard data={data} />
+            <AccountCard member={data.member} errorMessage={profileError} />
+          </div>
         </div>
-        <PredictionAuditSection data={data} />
-      </div>
 
-      <div className="mt-6">
-        <AdminPanel data={data} />
-      </div>
+        <div className="mt-6">
+          <GroupStandingsSection data={data} />
+        </div>
+
+        <div className="mt-6 grid gap-6">
+          <section className={cardClass()}>
+            <SectionTitle title="Match list" subtitle="All fixtures at a glance." />
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {data.matches.map((match) => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  teams={data.teams}
+                  memberRole={data.member?.role ?? "MEMBER"}
+                />
+              ))}
+            </div>
+          </section>
+          <PrizePoolCard data={data} />
+        </div>
+      </section>
+
+      {data.member?.role === "ADMIN" ? (
+        <section id="admin-work" className="mt-8 space-y-6">
+          <section className={cardClass()}>
+            <SectionTitle title="Admin work" subtitle="Tools for results, payments, and logs." />
+            <p className="text-sm leading-6 text-emerald-950/70">
+              Keep predictions above and admin tasks here, so the workflow stays separate.
+            </p>
+          </section>
+          <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <PaymentStatusTable data={data} />
+            <PredictionAuditSection data={data} />
+          </div>
+          <AdminPanel data={data} />
+        </section>
+      ) : null}
 
       <footer className="py-8 text-center text-sm text-emerald-950/60">
         Private office pool.

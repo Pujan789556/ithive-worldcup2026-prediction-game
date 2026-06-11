@@ -30,5 +30,11 @@ export default async function Page({ searchParams }: PageProps) {
 
   const data = await fetchDashboardData();
 
-  return <DashboardShell data={data} profileError={queryValue(resolvedSearchParams, "profile_error")} />;
+  return (
+    <DashboardShell
+      data={data}
+      profileError={queryValue(resolvedSearchParams, "profile_error")}
+      predictionError={queryValue(resolvedSearchParams, "prediction_error")}
+    />
+  );
 }

@@ -360,8 +360,7 @@ export async function getCompletedMatchBreakdown(matchId: string) {
   return fetchCompletedMatchBreakdown(matchId);
 }
 
-export async function submitPrediction(formData: FormData) {
-  const member = await requireAuth();
+export async function storePrediction(memberId: string, formData: FormData) {
   const matchId = z.string().uuid().parse(formString(formData, "match_id"));
   const stageCode = z.string().min(1).parse(formString(formData, "stage_code"));
   const predictedOutcome = formNullableString(formData, "predicted_outcome");
@@ -428,18 +427,31 @@ export async function submitPrediction(formData: FormData) {
       throw new Error("Pick a winner for the knockout match.");
     }
     resolvedOutcome = resolvedWinnerTeamId === match.home_team_id ? "HOME_WIN" : "AWAY_WIN";
-  } else if (!resolvedOutcome) {
-    throw new Error("Pick an outcome for the group-stage match.");
-  } else if (resolvedOutcome === "DRAW") {
-    resolvedWinnerTeamId = null;
   } else {
-    resolvedWinnerTeamId =
-      resolvedOutcome === "HOME_WIN" ? match.home_team_id : match.away_team_id;
+    if (!resolvedOutcome) {
+      if (predictedHomeScore === null || predictedAwayScore === null) {
+        throw new Error("Enter both scores for the group-stage match.");
+      }
+
+      resolvedOutcome =
+        predictedHomeScore > predictedAwayScore
+          ? "HOME_WIN"
+          : predictedAwayScore > predictedHomeScore
+            ? "AWAY_WIN"
+            : "DRAW";
+    }
+
+    if (resolvedOutcome === "DRAW") {
+      resolvedWinnerTeamId = null;
+    } else {
+      resolvedWinnerTeamId =
+        resolvedOutcome === "HOME_WIN" ? match.home_team_id : match.away_team_id;
+    }
   }
 
   const predictionRows = await typedSql<{ prediction_id: string }>`
     select submit_prediction(
-      ${member.id},
+      ${memberId},
       ${matchId},
       ${resolvedOutcome},
       ${resolvedWinnerTeamId},
@@ -457,6 +469,12 @@ export async function submitPrediction(formData: FormData) {
     throw new Error("Prediction could not be saved.");
   }
 
+  return matchId;
+}
+
+export async function submitPrediction(formData: FormData) {
+  const member = await requireAuth();
+  await storePrediction(member.id, formData);
   redirect("/");
 }
 
