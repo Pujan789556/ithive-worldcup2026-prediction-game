@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.18), transparent 30%),
+    radial-gradient(circle at 80% 10%, rgba(103, 210, 139, 0.18), transparent 24%),
+    linear-gradient(180deg, #f6f2e8 0%, #eef7ec 100%);
+  color: #123120;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.pitch-card {
+  border: 1px solid rgba(16, 73, 45, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 50px rgba(6, 25, 12, 0.12);
+}
+
+.pitch-title {
+  letter-spacing: -0.03em;
+}
+
+.badge {
+  @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em];
+}
+
+.field {
+  @apply w-full rounded-2xl border border-emerald-900/10 bg-white/90 px-4 py-3 text-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-2xl bg-turf px-4 py-3 text-sm font-semibold text-chalk transition hover:bg-[#0a2f25] focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-2xl border border-emerald-900/15 bg-white px-4 py-3 text-sm font-semibold text-turf transition hover:bg-emerald-50;
+}
+
