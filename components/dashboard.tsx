@@ -376,7 +376,12 @@ function UpcomingMatchCard({
                     {match.home_team_name} vs {match.away_team_name}
                   </p>
                 </div>
-                <span className={`badge shrink-0 ${badgeForStatus(match.status)}`}>{match.status}</span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
+                  {match.prediction_id ? (
+                    <span className="badge bg-amber-100 text-amber-900">Already predicted</span>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-3 grid gap-2 text-sm text-emerald-950/80">
@@ -416,9 +421,7 @@ function UpcomingMatchCard({
                 {match.status === "SCHEDULED" ? (
                   <details className="mt-1 rounded-2xl border border-amber-900/15 bg-amber-50 p-3">
                     <summary className="cursor-pointer list-none rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-amber-950 transition hover:bg-amber-50">
-                      {match.prediction_id
-                        ? `Already predicted${predictionSummaryText(match, teams) ? `: ${predictionSummaryText(match, teams)}` : ""}`
-                        : "Predict this"}
+                      {match.prediction_id ? "Update prediction" : "Predict"}
                     </summary>
                     <div className="mt-3">
                       <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
@@ -579,7 +582,12 @@ function MatchCard({
             {formatNepalDateTime(match.kickoff_at)}
           </p>
         </div>
-        <span className={`badge shrink-0 ${badgeForStatus(match.status)}`}>{match.status}</span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
+          {match.prediction_id ? (
+            <span className="badge bg-amber-100 text-amber-900">Already predicted</span>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-3 py-3 text-sm">
@@ -604,12 +612,9 @@ function MatchCard({
       {match.status === "SCHEDULED" ? (
         <details
           className="mt-4 rounded-[20px] border border-emerald-900/10 bg-emerald-50/70 p-3"
-          open={Boolean(match.prediction_id)}
         >
           <summary className="cursor-pointer list-none text-sm font-semibold text-turf">
-            {match.prediction_id
-              ? `Already predicted${predictionSummaryText(match, teams) ? `: ${predictionSummaryText(match, teams)}` : ""}`
-              : "Make prediction"}
+            {match.prediction_id ? "Update prediction" : "Predict"}
           </summary>
           <div className="mt-3">
             <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
@@ -622,7 +627,7 @@ function MatchCard({
 
 function LeaderboardCard({ data }: { data: DashboardData }) {
   return (
-    <section className={cardClass()}>
+    <section id="leaderboard" className={cardClass()}>
       <SectionTitle title="Leaderboard" subtitle="Current standings." />
       <div className="overflow-x-auto rounded-[24px] border border-emerald-900/10 bg-white/80">
         <table className="min-w-[760px] w-full text-left text-sm">
@@ -729,7 +734,7 @@ function AccountCard({
 
 function GroupStandingsSection({ data }: { data: DashboardData }) {
   return (
-    <section className={cardClass()}>
+    <section id="group-standing" className={cardClass()}>
       <SectionTitle title="Group Standings" subtitle="Calculated from completed group-stage matches only." />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {data.groups.map((group) => {
@@ -1224,6 +1229,24 @@ function AdminWorkspaceMenu() {
         Predictions
       </a>
       <a
+        href="#leaderboard"
+        className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-100"
+      >
+        Leaderboard
+      </a>
+      <a
+        href="#match-list"
+        className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-100"
+      >
+        Match list
+      </a>
+      <a
+        href="#group-standing"
+        className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-100"
+      >
+        Group standing
+      </a>
+      <a
         href="#admin-work"
         className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-turf transition hover:bg-emerald-100"
       >
@@ -1262,26 +1285,22 @@ export function DashboardShell({
         />
 
         <LeaderboardCard data={data} />
+        <section id="match-list" className={cardClass()}>
+          <SectionTitle title="Match list" subtitle="All fixtures at a glance." />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {data.matches.map((match) => (
+              <MatchCard
+                key={match.id}
+                match={match}
+                teams={data.teams}
+                memberRole={data.member?.role ?? "MEMBER"}
+              />
+            ))}
+          </div>
+        </section>
 
         <div className="mt-6">
           <GroupStandingsSection data={data} />
-        </div>
-
-        <div className="mt-6 grid gap-6">
-          <section id="match-list" className={cardClass()}>
-            <SectionTitle title="Match list" subtitle="All fixtures at a glance." />
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.matches.map((match) => (
-                <MatchCard
-                  key={match.id}
-                  match={match}
-                  teams={data.teams}
-                  memberRole={data.member?.role ?? "MEMBER"}
-                />
-              ))}
-            </div>
-          </section>
-          <PrizePoolCard data={data} />
         </div>
       </section>
 
