@@ -14,7 +14,7 @@ export function MatchLeaderboardModal({
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const block = matchLeaderboards.find((entry) => entry.match_id === match.id);
   const rows = block?.rows ?? [];
-  const canShowLeaderboard = match.status === 'COMPLETED' || match.home_score !== null || match.away_score !== null || match.actual_outcome !== null;
+  const canShowLeaderboard = match.status === 'LOCKED' || match.status === 'COMPLETED';
 
   function openModal() {
     dialogRef.current?.showModal();
