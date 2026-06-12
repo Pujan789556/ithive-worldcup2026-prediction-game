@@ -1,20 +1,38 @@
 'use client';
 
 import { useRef } from 'react';
-import type { MatchLeaderboardBlock, MatchRow } from '@/lib/game';
+import type { MatchLeaderboardBlock, MatchPredictionSummaryBlock, MatchRow, Team } from '@/lib/game';
 import { currencyLabel } from './dashboard-shared';
+
+function teamLabel(teams: Team[], teamId: string | null) {
+  if (!teamId) return 'Hidden';
+  const team = teams.find((entry) => entry.id === teamId) ?? null;
+  return `${team?.flag_emoji ?? ''} ${team?.short_name || team?.name || 'TBD'}`.trim();
+}
+
+function predictionLabel(value: MatchRow['predicted_outcome'] | null) {
+  if (!value) return 'Hidden';
+  if (value === 'HOME_WIN') return 'Home win';
+  if (value === 'AWAY_WIN') return 'Away win';
+  return 'Draw';
+}
 
 export function MatchLeaderboardModal({
   match,
   matchLeaderboards,
+  predictionSummaries,
+  teams,
 }: {
   match: MatchRow;
   matchLeaderboards: MatchLeaderboardBlock[];
+  predictionSummaries: MatchPredictionSummaryBlock[];
+  teams: Team[];
 }) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const block = matchLeaderboards.find((entry) => entry.match_id === match.id);
   const rows = block?.rows ?? [];
   const canShowLeaderboard = match.status === 'LOCKED' || match.status === 'COMPLETED';
+  const predictionRows = predictionSummaries.find((entry) => entry.match_id === match.id)?.rows ?? [];
 
   function openModal() {
     dialogRef.current?.showModal();
@@ -80,6 +98,8 @@ export function MatchLeaderboardModal({
                   <tr>
                     <th className="px-4 py-3">Rank</th>
                     <th className="px-4 py-3">Member</th>
+                    <th className="px-4 py-3">Prediction</th>
+                    <th className="px-4 py-3">Score</th>
                     <th className="px-4 py-3">Points</th>
                     <th className="px-4 py-3">Match contribution</th>
                     <th className="px-4 py-3">Match winnings</th>
@@ -87,19 +107,58 @@ export function MatchLeaderboardModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.member_id} className="border-t border-emerald-900/5">
-                      <td className="px-4 py-3 font-semibold text-turf">#{row.rank}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-turf">{row.full_name}</div>
-                        <div className="text-xs text-emerald-950/65">{row.email}</div>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
-                      <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_contributed)}</td>
-                      <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
-                      <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.net_amount)}</td>
-                    </tr>
-                  ))}
+                  {rows.map((row) => {
+                    const prediction = predictionRows.find((entry) => entry.member_id === row.member_id) ?? null;
+
+                    return (
+                      <tr key={row.member_id} className="border-t border-emerald-900/5">
+                        <td className="px-4 py-3 font-semibold text-turf">#{row.rank}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-turf">{row.full_name}</div>
+                          <div className="text-xs text-emerald-950/65">{row.email}</div>
+                        </td>
+                        <td className="px-4 py-3 text-turf">
+                          {prediction ? (
+                            match.stage_is_knockout ? (
+                              <span>
+                                {predictionLabel(prediction.predicted_outcome)} • Winner{' '}
+                                {teamLabel(teams, prediction.predicted_winner_team_id)}
+                              </span>
+                            ) : (
+                              <span>{predictionLabel(prediction.predicted_outcome)}</span>
+                            )
+                          ) : (
+                            'Hidden'
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-turf">
+                          {prediction ? (
+                            match.stage_is_knockout ? (
+                              <span>
+                                {prediction.predicted_home_score ?? '?'}-{prediction.predicted_away_score ?? '?'}
+                                {prediction.predicts_extra_time
+                                  ? ` ET ${prediction.predicted_home_extra_score ?? '?'}-${prediction.predicted_away_extra_score ?? '?'}`
+                                  : ''}
+                                {prediction.predicts_penalties
+                                  ? ` Pens ${teamLabel(teams, prediction.predicted_penalty_winner_team_id)}`
+                                  : ''}
+                              </span>
+                            ) : (
+                              <span>
+                                {prediction.predicted_home_score ?? '?'}-{prediction.predicted_away_score ?? '?'}
+                              </span>
+                            )
+                          ) : (
+                            'Hidden'
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
+                        <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_contributed)}</td>
+                        <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
+                        <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.net_amount)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

@@ -651,7 +651,12 @@ function MatchCard({
           <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
           {hasPrediction ? <span className="badge bg-amber-100 text-amber-900">Already predicted</span> : null}
           {match.status === 'LOCKED' || match.status === 'COMPLETED' ? (
-            <MatchLeaderboardModal match={match} matchLeaderboards={matchLeaderboards} />
+            <MatchLeaderboardModal
+              match={match}
+              matchLeaderboards={matchLeaderboards}
+              predictionSummaries={predictionSummaries}
+              teams={teams}
+            />
           ) : null}
         </div>
       </div>
