@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useRef } from "react";
-import type { MatchLeaderboardBlock, MatchRow } from "@/lib/game";
-import { currencyLabel } from "./dashboard-shared";
+import { useRef } from 'react';
+import type { MatchLeaderboardBlock, MatchRow } from '@/lib/game';
+import { currencyLabel } from './dashboard-shared';
 
 export function MatchLeaderboardModal({
   match,
-  matchLeaderboards
+  matchLeaderboards,
 }: {
   match: MatchRow;
   matchLeaderboards: MatchLeaderboardBlock[];
@@ -14,6 +14,7 @@ export function MatchLeaderboardModal({
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const block = matchLeaderboards.find((entry) => entry.match_id === match.id);
   const rows = block?.rows ?? [];
+  const canShowLeaderboard = match.status === 'COMPLETED' || match.home_score !== null || match.away_score !== null || match.actual_outcome !== null;
 
   function openModal() {
     dialogRef.current?.showModal();
@@ -23,7 +24,7 @@ export function MatchLeaderboardModal({
     dialogRef.current?.close();
   }
 
-  if (match.status !== "COMPLETED") {
+  if (!canShowLeaderboard) {
     return null;
   }
 
@@ -55,6 +56,9 @@ export function MatchLeaderboardModal({
               <p className="mt-1 text-sm text-emerald-950/70">
                 {match.home_team_name} vs {match.away_team_name}
               </p>
+              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/55">
+                Per member contribution and winnings for this match
+              </p>
             </div>
             <button
               type="button"
@@ -71,14 +75,14 @@ export function MatchLeaderboardModal({
             {rows.length === 0 ? (
               <div className="px-4 py-4 text-sm text-emerald-950/65">No leaderboard data yet.</div>
             ) : (
-              <table className="min-w-[640px] w-full text-left text-sm">
+              <table className="min-w-[760px] w-full text-left text-sm">
                 <thead className="bg-emerald-50 text-xs uppercase tracking-[0.18em] text-emerald-950/60">
                   <tr>
                     <th className="px-4 py-3">Rank</th>
                     <th className="px-4 py-3">Member</th>
                     <th className="px-4 py-3">Points</th>
-                    <th className="px-4 py-3">Contributed</th>
-                    <th className="px-4 py-3">Winnings</th>
+                    <th className="px-4 py-3">Match contribution</th>
+                    <th className="px-4 py-3">Match winnings</th>
                     <th className="px-4 py-3">Net</th>
                   </tr>
                 </thead>
@@ -91,12 +95,8 @@ export function MatchLeaderboardModal({
                         <div className="text-xs text-emerald-950/65">{row.email}</div>
                       </td>
                       <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
-                      <td className="px-4 py-3 font-semibold text-turf">
-                        {currencyLabel(row.total_contributed)}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-turf">
-                        {currencyLabel(row.total_winnings)}
-                      </td>
+                      <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_contributed)}</td>
+                      <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
                       <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.net_amount)}</td>
                     </tr>
                   ))}

@@ -20,16 +20,20 @@ function predictionLabel(value: MatchRow["predicted_outcome"] | null) {
 export function MatchPredictionModal({
   match,
   teams,
-  rows
+  rows,
+  triggerLabel,
+  triggerClassName
 }: {
   match: MatchRow;
   teams: Team[];
   rows: MatchPredictionSummaryBlock["rows"];
+  triggerLabel?: string;
+  triggerClassName?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const showResults = match.status === "COMPLETED";
+  const showResults = match.status === "COMPLETED" || match.home_score !== null || match.away_score !== null || match.actual_outcome !== null;
 
-  if (match.status !== "LOCKED" && match.status !== "LIVE" && match.status !== "COMPLETED") {
+  if (!showResults && match.status !== "LOCKED" && match.status !== "LIVE" && match.status !== "COMPLETED") {
     return null;
   }
 
@@ -46,14 +50,22 @@ export function MatchPredictionModal({
       <button
         type="button"
         onClick={openModal}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white transition hover:opacity-90"
-        aria-label="Open prediction board"
+        className={
+          triggerLabel
+            ? `inline-flex items-center justify-center rounded-2xl bg-amber-500 px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 ${triggerClassName ?? ""}`
+            : `inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white transition hover:opacity-90 ${triggerClassName ?? ""}`
+        }
+        aria-label={triggerLabel ? triggerLabel : "Open prediction board"}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-current stroke-[2]">
-          <path d="M4 7h16" />
-          <path d="M4 12h16" />
-          <path d="M4 17h16" />
-        </svg>
+        {triggerLabel ? (
+          triggerLabel
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-current stroke-[2]">
+            <path d="M4 7h16" />
+            <path d="M4 12h16" />
+            <path d="M4 17h16" />
+          </svg>
+        )}
       </button>
 
       <dialog
@@ -90,10 +102,10 @@ export function MatchPredictionModal({
                   <th className="px-4 py-3">Score</th>
                   {showResults ? (
                     <>
-                      <th className="px-4 py-3">Pts</th>
-                      <th className="px-4 py-3">Prize</th>
-                      <th className="px-4 py-3">Contrib.</th>
-                      <th className="px-4 py-3">Pay</th>
+                      <th className="px-4 py-3">Points</th>
+                      <th className="px-4 py-3">Contribution</th>
+                      <th className="px-4 py-3">Winnings</th>
+                      <th className="px-4 py-3">Net</th>
                     </>
                   ) : null}
                 </tr>
@@ -138,9 +150,15 @@ export function MatchPredictionModal({
                       {showResults ? (
                         <>
                           <td className="px-4 py-3 font-semibold text-turf">{row.total_points ?? 0}</td>
-                          <td className="px-4 py-3 text-turf">{row.prize_amount ?? "0.00"}</td>
                           <td className="px-4 py-3 text-turf">{row.contribution_amount ?? "0.00"}</td>
-                          <td className="px-4 py-3 text-turf">{row.payment_status ?? "-"}</td>
+                          <td className="px-4 py-3 text-turf">{row.prize_amount ?? "0.00"}</td>
+                          <td className="px-4 py-3 font-semibold text-turf">
+                            {currencyLabel(
+                              (
+                                Number(row.prize_amount ?? 0) - Number(row.contribution_amount ?? 0)
+                              ).toFixed(2)
+                            )}
+                          </td>
                         </>
                       ) : null}
                     </tr>

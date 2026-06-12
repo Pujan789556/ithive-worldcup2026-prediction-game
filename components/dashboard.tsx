@@ -1,7 +1,7 @@
-import { Countdown } from "./countdown";
-import { MatchLeaderboardModal } from "./match-leaderboard-modal";
-import { MatchPredictionModal } from "./match-prediction-modal";
-import { currencyLabel } from "./dashboard-shared";
+import { Countdown } from './countdown';
+import { MatchLeaderboardModal } from './match-leaderboard-modal';
+import { MatchPredictionModal } from './match-prediction-modal';
+import { currencyLabel } from './dashboard-shared';
 import {
   cancelFixture,
   createFixture,
@@ -19,79 +19,71 @@ import {
   syncLocks,
   updateFixture,
   updateUnresolvedPool,
-  updateStageAmount
-} from "@/app/actions";
-import { PredictionFormClient } from "./prediction-form-client";
-import type {
-  DashboardData,
-  MatchLeaderboardBlock,
-  MatchPredictionSummaryBlock,
-  MatchRow,
-  Team
-} from "@/lib/game";
+  updateStageAmount,
+} from '@/app/actions';
+import { PredictionFormClient } from './prediction-form-client';
+import type { DashboardData, MatchLeaderboardBlock, MatchPredictionSummaryBlock, MatchRow, Team } from '@/lib/game';
 
-function cardClass(extra = "") {
+function cardClass(extra = '') {
   return `pitch-card rounded-[28px] p-5 md:p-6 ${extra}`;
 }
 
 function matchLabel(match: MatchRow) {
-  const home = `${match.home_team_flag_emoji ?? ""} ${match.home_team_short_name || match.home_team_name}`.trim();
-  const away = `${match.away_team_flag_emoji ?? ""} ${match.away_team_short_name || match.away_team_name}`.trim();
+  const home = `${match.home_team_flag_emoji ?? ''} ${match.home_team_short_name || match.home_team_name}`.trim();
+  const away = `${match.away_team_flag_emoji ?? ''} ${match.away_team_short_name || match.away_team_name}`.trim();
   return `${home} vs ${away}`;
 }
 
 function teamLabel(teams: Team[], teamId: string | null) {
-  if (!teamId) return "Hidden";
+  if (!teamId) return 'Hidden';
   const team = teams.find((entry) => entry.id === teamId) ?? null;
-  const name = team?.short_name || team?.name || "TBD";
-  return `${team?.flag_emoji ?? ""} ${name}`.trim();
+  const name = team?.short_name || team?.name || 'TBD';
+  return `${team?.flag_emoji ?? ''} ${name}`.trim();
 }
 
 function compactTeamLabel(team: Team | null) {
-  if (!team) return "TBD";
-  return team.short_name || team.name || "TBD";
+  if (!team) return 'TBD';
+  return team.short_name || team.name || 'TBD';
 }
 
 function teamLabelParts(team: Team | null) {
   if (!team) {
     return {
-      emoji: "",
-      shortName: "TBD",
-      fullName: "TBD"
+      emoji: '',
+      shortName: 'TBD',
+      fullName: 'TBD',
     };
   }
 
   return {
-    emoji: team.flag_emoji ?? "",
-    shortName: team.short_name || team.name || "TBD",
-    fullName: team.name || team.short_name || "TBD"
+    emoji: team.flag_emoji ?? '',
+    shortName: team.short_name || team.name || 'TBD',
+    fullName: team.name || team.short_name || 'TBD',
   };
 }
 
-function TeamLabelStack({ team, align = "left" }: { team: Team | null; align?: "left" | "center" }) {
+function TeamLabelStack({ team, align = 'left' }: { team: Team | null; align?: 'left' | 'center' }) {
   const parts = teamLabelParts(team);
-  const alignClass = align === "center" ? "items-center text-center" : "items-start text-left";
+  const alignClass = align === 'center' ? 'items-center text-center' : 'items-start text-left';
 
   return (
     <span className={`flex flex-col ${alignClass}`}>
       <span className="text-sm font-black leading-tight">
-        {parts.emoji ? `${parts.emoji} ` : ""}
+        {parts.emoji ? `${parts.emoji} ` : ''}
         {parts.shortName}
       </span>
       {parts.fullName !== parts.shortName ? (
-        <span className="text-[11px] font-medium leading-4 text-emerald-950/60">
-          {parts.fullName}
-        </span>
+        <span className="text-[11px] font-medium leading-4 text-emerald-950/60">{parts.fullName}</span>
       ) : null}
     </span>
   );
 }
 
 function formatNepalDateTime(iso: string) {
-  return new Intl.DateTimeFormat("en-NP", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Kathmandu"
+  return new Intl.DateTimeFormat('en-NP', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kathmandu',
   }).format(new Date(iso));
 }
 
@@ -106,7 +98,7 @@ function resultReadyAt(match: MatchRow) {
 
 function canUpdateMatchResult(match: MatchRow) {
   const readyAt = resultReadyAt(match);
-  return match.status !== "SCHEDULED" || (readyAt !== null && Date.now() >= readyAt);
+  return match.status !== 'SCHEDULED' || (readyAt !== null && Date.now() >= readyAt);
 }
 
 function predictionSummaryText(match: MatchRow, teams: Team[]) {
@@ -122,7 +114,7 @@ function predictionSummaryText(match: MatchRow, teams: Team[]) {
     const score =
       match.predicted_home_score !== null && match.predicted_away_score !== null
         ? ` (${match.predicted_home_score}-${match.predicted_away_score})`
-        : "";
+        : '';
     return `${winner}${score}`;
   }
 
@@ -133,30 +125,62 @@ function predictionSummaryText(match: MatchRow, teams: Team[]) {
   return `${home} ${match.predicted_home_score}-${match.predicted_away_score} ${away}`;
 }
 
-function predictionLabel(value: MatchRow["predicted_outcome"] | null) {
-  if (!value) return "Hidden";
-  if (value === "HOME_WIN") return "Home win";
-  if (value === "AWAY_WIN") return "Away win";
-  return "Draw";
+function predictionLabel(value: MatchRow['predicted_outcome'] | null) {
+  if (!value) return 'Hidden';
+  if (value === 'HOME_WIN') return 'Home win';
+  if (value === 'AWAY_WIN') return 'Away win';
+  return 'Draw';
+}
+
+function actualResultLabel(match: MatchRow) {
+  const homeScore = match.home_score;
+  const awayScore = match.away_score;
+
+  if (homeScore !== null && awayScore !== null) {
+    const score = `FT ${homeScore}-${awayScore}`;
+    if (match.stage_is_knockout && match.went_penalties && match.winner_team_id) {
+      const winner =
+        match.winner_team_id === match.home_team_id
+          ? match.home_team_name
+          : match.winner_team_id === match.away_team_id
+            ? match.away_team_name
+            : 'Winner';
+      return `${score}${match.went_extra_time ? ' ET' : ''} on pens (${winner})`;
+    }
+    if (match.stage_is_knockout && match.went_extra_time) {
+      return `${score} ET`;
+    }
+    return score;
+  }
+
+  if (match.actual_outcome) {
+    return predictionLabel(match.actual_outcome);
+  }
+
+  return 'TBD';
+}
+
+function hasMatchResult(match: MatchRow) {
+  return match.home_score !== null || match.away_score !== null || match.actual_outcome !== null;
 }
 
 function toDatetimeLocalValue(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
-    return "";
+    return '';
   }
 
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function badgeForStatus(status: MatchRow["status"]) {
-  const map: Record<MatchRow["status"], string> = {
-    SCHEDULED: "bg-emerald-100 text-emerald-900",
-    LOCKED: "bg-amber-100 text-amber-900",
-    LIVE: "bg-sky-100 text-sky-900",
-    COMPLETED: "bg-slate-200 text-slate-900",
-    CANCELLED: "bg-rose-100 text-rose-900"
+function badgeForStatus(status: MatchRow['status']) {
+  const map: Record<MatchRow['status'], string> = {
+    SCHEDULED: 'bg-emerald-100 text-emerald-900',
+    LOCKED: 'bg-amber-100 text-amber-900',
+    LIVE: 'bg-sky-100 text-sky-900',
+    COMPLETED: 'bg-slate-200 text-slate-900',
+    CANCELLED: 'bg-rose-100 text-rose-900',
   };
   return map[status];
 }
@@ -164,7 +188,7 @@ function badgeForStatus(status: MatchRow["status"]) {
 export function LoginCard({ errorMessage }: { errorMessage?: string | null }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-8">
-      <section className={cardClass("w-full max-w-lg")}>
+      <section className={cardClass('w-full max-w-lg')}>
         <div className="mb-6">
           <span className="badge bg-emerald-100 text-emerald-900">Internal office pool</span>
           <h1 className="pitch-title mt-4 text-4xl font-black tracking-tight text-turf md:text-5xl">
@@ -224,22 +248,20 @@ export function LoginCard({ errorMessage }: { errorMessage?: string | null }) {
 
 export function PasswordChangeCard({
   member,
-  errorMessage
+  errorMessage,
 }: {
   member: { email: string; full_name: string };
   errorMessage?: string | null;
 }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-8">
-      <section className={cardClass("w-full max-w-xl")}>
+      <section className={cardClass('w-full max-w-xl')}>
         <div className="mb-6">
           <span className="badge bg-amber-100 text-amber-900">First login</span>
           <h1 className="pitch-title mt-4 text-4xl font-black tracking-tight text-turf">
             Change your temporary password
           </h1>
-          <p className="mt-3 text-sm leading-6 text-emerald-950/80">
-            Change it once before you start predicting.
-          </p>
+          <p className="mt-3 text-sm leading-6 text-emerald-950/80">Change it once before you start predicting.</p>
         </div>
 
         {errorMessage ? (
@@ -249,8 +271,7 @@ export function PasswordChangeCard({
         ) : null}
 
         <div className="mb-4 rounded-[24px] bg-emerald-50 px-4 py-3 text-sm text-emerald-950/80">
-          Logged in as <span className="font-semibold text-turf">{member.full_name}</span> (
-          {member.email}).
+          Logged in as <span className="font-semibold text-turf">{member.full_name}</span> ({member.email}).
         </div>
 
         <form action={changeInitialPassword} className="space-y-4">
@@ -308,15 +329,11 @@ function TopHeader({ data }: { data: DashboardData }) {
   return (
     <header className="mb-6 flex flex-col gap-4 rounded-[32px] bg-turf px-5 py-5 text-chalk shadow-soft md:flex-row md:items-center md:justify-between md:px-7">
       <div>
-        <span className="badge bg-white/10 text-chalk">
-          {data.member.role === "ADMIN" ? "Admin" : "Player"}
-        </span>
+        <span className="badge bg-white/10 text-chalk">{data.member.role === 'ADMIN' ? 'Admin' : 'Player'}</span>
         <h2 className="pitch-title mt-3 text-3xl font-black tracking-tight">
-          Hey {data.member.full_name.split(" ")[0]}, ready for kickoff?
+          Hey {data.member.full_name.split(' ')[0]}, ready for kickoff?
         </h2>
-        <p className="mt-2 max-w-2xl text-sm text-chalk/80">
-          Track the lock timer and submit before kickoff.
-        </p>
+        <p className="mt-2 max-w-2xl text-sm text-chalk/80">Track the lock timer and submit before kickoff.</p>
       </div>
       <form action={logout}>
         <button className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-chalk transition hover:bg-white/10">
@@ -340,14 +357,16 @@ function UpcomingMatchCard({
   matches,
   teams,
   memberRole,
-  predictionSummaries
+  predictionSummaries,
 }: {
   matches: MatchRow[];
   teams: Team[];
-  memberRole: "ADMIN" | "MEMBER";
+  memberRole: 'ADMIN' | 'MEMBER';
   predictionSummaries: MatchPredictionSummaryBlock[];
 }) {
-  if (matches.length === 0) {
+  const upcomingMatches = matches.filter((match) => match.status === 'SCHEDULED');
+
+  if (upcomingMatches.length === 0) {
     return (
       <section className={cardClass()}>
         <SectionTitle title="Today / upcoming matches" subtitle="Nothing scheduled yet." />
@@ -358,10 +377,7 @@ function UpcomingMatchCard({
   return (
     <section className={cardClass()}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle
-          title="Today / upcoming matches"
-          subtitle="Next four fixtures in Nepal time."
-        />
+        <SectionTitle title="Today / upcoming matches" subtitle="Next four fixtures in Nepal time." />
         <a
           href="#match-list"
           className="rounded-2xl border border-emerald-900/10 bg-white px-4 py-2 text-sm font-semibold text-turf transition hover:bg-emerald-50"
@@ -370,18 +386,18 @@ function UpcomingMatchCard({
         </a>
       </div>
       <div className="flex flex-col gap-3 xl:flex-row">
-        {matches.map((match, index) => {
+        {upcomingMatches.map((match, index) => {
           const homeTeam = teams.find((team) => team.id === match.home_team_id) ?? null;
           const awayTeam = teams.find((team) => team.id === match.away_team_id) ?? null;
           const isNext = index === 0;
-          const locked = match.status !== "SCHEDULED";
+          const locked = match.status !== 'SCHEDULED';
           return (
             <article
               key={match.id}
               className={`min-w-0 flex-1 rounded-[22px] border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
                 isNext
-                  ? "border-turf/20 bg-white text-turf ring-2 ring-turf/10"
-                  : "border-emerald-900/10 bg-white/90 text-turf"
+                  ? 'border-turf/20 bg-white text-turf ring-2 ring-turf/10'
+                  : 'border-emerald-900/10 bg-white/90 text-turf'
               }`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -389,9 +405,7 @@ function UpcomingMatchCard({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-950/55">
                     {match.stage_name}
                   </p>
-                  <h4 className="mt-1 break-words text-base font-black leading-tight text-turf">
-                    {matchLabel(match)}
-                  </h4>
+                  <h4 className="mt-1 break-words text-base font-black leading-tight text-turf">{matchLabel(match)}</h4>
                   <p className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
                     {match.home_team_name} vs {match.away_team_name}
                   </p>
@@ -401,13 +415,11 @@ function UpcomingMatchCard({
                   {match.prediction_id ? (
                     <span className="badge bg-amber-100 text-amber-900">Already predicted</span>
                   ) : null}
-                  {match.status === "LOCKED" || match.status === "LIVE" ? (
+                  {match.status === 'LOCKED' || match.status === 'LIVE' || match.status === 'COMPLETED' ? (
                     <MatchPredictionModal
                       match={match}
                       teams={teams}
-                      rows={
-                        predictionSummaries.find((entry) => entry.match_id === match.id)?.rows ?? []
-                      }
+                      rows={predictionSummaries.find((entry) => entry.match_id === match.id)?.rows ?? []}
                     />
                   ) : null}
                 </div>
@@ -415,24 +427,18 @@ function UpcomingMatchCard({
 
               <div className="mt-3 grid gap-2 text-sm text-emerald-950/80">
                 <div className="rounded-2xl bg-emerald-50 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-950/55">
-                    Kickoff
-                  </p>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-950/55">Kickoff</p>
                   <p className="mt-1 text-sm font-bold">{formatNepalDateTime(match.kickoff_at)}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-2xl bg-emerald-50 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-950/55">
-                      Home
-                    </p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-950/55">Home</p>
                     <div className="mt-1">
                       <TeamLabelStack team={homeTeam} />
                     </div>
                   </div>
                   <div className="rounded-2xl bg-emerald-50 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-950/55">
-                      Away
-                    </p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-950/55">Away</p>
                     <div className="mt-1">
                       <TeamLabelStack team={awayTeam} />
                     </div>
@@ -440,24 +446,24 @@ function UpcomingMatchCard({
                 </div>
                 <p className="text-xs leading-5 text-emerald-950/70">
                   {locked ? (
-                    "Locked or live."
+                    'Locked or live.'
                   ) : (
                     <>
                       Locks in <Countdown targetIso={match.lock_at} />
                     </>
                   )}
                 </p>
-                {match.status === "SCHEDULED" ? (
+                {match.status === 'SCHEDULED' ? (
                   <details className="mt-1 rounded-2xl border border-amber-900/15 bg-amber-50 p-3">
                     <summary className="cursor-pointer list-none rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-amber-950 transition hover:bg-amber-50">
-                      {match.prediction_id ? "Update prediction" : "Predict"}
+                      {match.prediction_id ? 'Update prediction' : 'Predict'}
                     </summary>
                     <div className="mt-3">
                       <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
                     </div>
                   </details>
                 ) : null}
-                {memberRole === "MEMBER" && match.prediction_id ? (
+                {memberRole === 'MEMBER' && match.prediction_id ? (
                   <details className="mt-1 rounded-2xl border border-amber-900/15 bg-amber-50 p-3">
                     <summary className="cursor-pointer list-none rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-amber-950 transition hover:bg-amber-50">
                       Raise issue
@@ -492,12 +498,16 @@ function PredictionForm({
   match,
   teams,
   memberRole,
-  compact = false
+  compact = false,
+  readOnly = false,
+  readOnlyButtonLabel = 'View saved prediction',
 }: {
   match: MatchRow;
   teams: Team[];
-  memberRole: "ADMIN" | "MEMBER";
+  memberRole: 'ADMIN' | 'MEMBER';
   compact?: boolean;
+  readOnly?: boolean;
+  readOnlyButtonLabel?: string;
 }) {
   return (
     <PredictionFormClient
@@ -506,6 +516,8 @@ function PredictionForm({
       memberRole={memberRole}
       compact={compact}
       initialHasPrediction={Boolean(match.prediction_id)}
+      readOnly={readOnly}
+      readOnlyButtonLabel={readOnlyButtonLabel}
     />
   );
 }
@@ -513,23 +525,20 @@ function PredictionForm({
 function PredictionVisibilityPanel({
   match,
   teams,
-  rows
+  rows,
 }: {
   match: MatchRow;
   teams: Team[];
-  rows: MatchPredictionSummaryBlock["rows"];
+  rows: MatchPredictionSummaryBlock['rows'];
 }) {
-  const showResults = match.status === "COMPLETED";
-
+  const showResults = match.status === 'COMPLETED';
   return (
     <div className="mt-4 rounded-[24px] border border-emerald-900/10 bg-white/85 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h4 className="font-bold text-turf">Prediction board</h4>
           <p className="text-sm text-emerald-950/70">
-            {match.status === "SCHEDULED"
-              ? "Hidden until lock time."
-              : "Locked and visible."}
+            {match.status === 'SCHEDULED' ? 'Hidden until lock time.' : 'Locked and visible.'}
           </p>
         </div>
         <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
@@ -563,43 +572,43 @@ function PredictionVisibilityPanel({
                     {predictionVisible ? (
                       match.stage_is_knockout ? (
                         <span>
-                          {predictionLabel(row.predicted_outcome)} • Winner{" "}
+                          {predictionLabel(row.predicted_outcome)} • Winner{' '}
                           {teamLabel(teams, row.predicted_winner_team_id)}
                         </span>
                       ) : (
                         <span>{predictionLabel(row.predicted_outcome)}</span>
                       )
                     ) : (
-                      "Hidden"
+                      'Hidden'
                     )}
                   </td>
                   <td className="px-4 py-3 text-turf">
                     {predictionVisible ? (
                       match.stage_is_knockout ? (
                         <span>
-                          {row.predicted_home_score ?? "?"}-{row.predicted_away_score ?? "?"}
-                          {row.predicts_extra_time ? ` ET ${row.predicted_home_extra_score ?? "?"}-${row.predicted_away_extra_score ?? "?"}` : ""}
-                          {row.predicts_penalties ? ` Pens ${teamLabel(teams, row.predicted_penalty_winner_team_id)}` : ""}
+                          {row.predicted_home_score ?? '?'}-{row.predicted_away_score ?? '?'}
+                          {row.predicts_extra_time
+                            ? ` ET ${row.predicted_home_extra_score ?? '?'}-${row.predicted_away_extra_score ?? '?'}`
+                            : ''}
+                          {row.predicts_penalties
+                            ? ` Pens ${teamLabel(teams, row.predicted_penalty_winner_team_id)}`
+                            : ''}
                         </span>
                       ) : (
                         <span>
-                          {row.predicted_home_score ?? "?"}-{row.predicted_away_score ?? "?"}
+                          {row.predicted_home_score ?? '?'}-{row.predicted_away_score ?? '?'}
                         </span>
                       )
                     ) : (
-                      "Hidden"
+                      'Hidden'
                     )}
                   </td>
                   {showResults ? (
                     <>
                       <td className="px-4 py-3 font-semibold text-turf">{row.total_points ?? 0}</td>
-                      <td className="px-4 py-3 text-turf">
-                        {currencyLabel(row.prize_amount ?? "0.00")}
-                      </td>
-                      <td className="px-4 py-3 text-turf">
-                        {currencyLabel(row.contribution_amount ?? "0.00")}
-                      </td>
-                      <td className="px-4 py-3 text-turf">{row.payment_status ?? "-"}</td>
+                      <td className="px-4 py-3 text-turf">{currencyLabel(row.prize_amount ?? '0.00')}</td>
+                      <td className="px-4 py-3 text-turf">{currencyLabel(row.contribution_amount ?? '0.00')}</td>
+                      <td className="px-4 py-3 text-turf">{row.payment_status ?? '-'}</td>
                     </>
                   ) : null}
                 </tr>
@@ -617,14 +626,17 @@ function MatchCard({
   teams,
   memberRole,
   matchLeaderboards,
-  predictionSummaries
+  predictionSummaries,
 }: {
   match: MatchRow;
   teams: Team[];
-  memberRole: "ADMIN" | "MEMBER";
+  memberRole: 'ADMIN' | 'MEMBER';
   matchLeaderboards: MatchLeaderboardBlock[];
   predictionSummaries: MatchPredictionSummaryBlock[];
 }) {
+  const isPredictionLocked = match.status === 'LOCKED' || match.status === 'COMPLETED';
+  const hasPrediction = Boolean(match.prediction_id);
+
   return (
     <article className="rounded-[22px] border border-emerald-900/10 bg-white/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
@@ -633,25 +645,70 @@ function MatchCard({
             {match.stage_name}
           </p>
           <h4 className="mt-1 truncate text-base font-black text-turf">{matchLabel(match)}</h4>
-          <p className="mt-1 text-sm text-emerald-950/65">
-            {formatNepalDateTime(match.kickoff_at)}
-          </p>
+          <p className="mt-1 text-sm text-emerald-950/65">{formatNepalDateTime(match.kickoff_at)}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
-          {match.prediction_id ? <span className="badge bg-amber-100 text-amber-900">Already predicted</span> : null}
-          {match.status === "LOCKED" || match.status === "LIVE" ? (
-            <MatchPredictionModal
-              match={match}
-              teams={teams}
-              rows={predictionSummaries.find((entry) => entry.match_id === match.id)?.rows ?? []}
-            />
-          ) : null}
-          {match.status === "COMPLETED" ? (
+          {hasPrediction ? <span className="badge bg-amber-100 text-amber-900">Already predicted</span> : null}
+          {match.status === 'COMPLETED' ? (
             <MatchLeaderboardModal match={match} matchLeaderboards={matchLeaderboards} />
           ) : null}
         </div>
       </div>
+
+      {isPredictionLocked ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <details className="rounded-2xl border border-emerald-900/10 bg-emerald-50/80 px-3 py-2">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-turf">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-current stroke-[2]">
+                <path d="M4 19.5V4.5A1.5 1.5 0 0 1 5.5 3h13A1.5 1.5 0 0 1 20 4.5v15a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5Z" />
+                <path d="M8 8h8" />
+                <path d="M8 12h8" />
+                <path d="M8 16h5" />
+              </svg>
+              View My Prediction
+            </summary>
+            <div className="mt-3">
+              <PredictionForm
+                match={match}
+                teams={teams}
+                memberRole={memberRole}
+                compact
+                readOnly
+                readOnlyButtonLabel="View My Prediction"
+              />
+            </div>
+          </details>
+
+          {hasPrediction ? (
+            <details className="rounded-2xl border border-amber-900/15 bg-amber-50/80 px-3 py-2">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-amber-950">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-current stroke-[2]">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+                Raise issue
+              </summary>
+              <form action={raisePredictionIssue} className="mt-3 space-y-3">
+                <input type="hidden" name="match_id" value={match.id} />
+                <textarea
+                  name="reason"
+                  className="field min-h-24"
+                  placeholder="Explain the issue in a few words."
+                  required
+                />
+                <p className="text-xs leading-5 text-amber-950/70">
+                  If 2 or 3 members flag the same match, admin will review the audit.
+                </p>
+                <button type="submit" className="btn-secondary w-full">
+                  Submit issue
+                </button>
+              </form>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-3 py-3 text-sm">
         <div>
@@ -660,50 +717,22 @@ function MatchCard({
         </div>
         <div className="text-right">
           <p className="text-xs uppercase tracking-[0.18em] text-emerald-950/60">Score</p>
-          <p className="mt-1 font-bold text-turf">
-            {match.status === "COMPLETED" ? `${match.home_score ?? 0}-${match.away_score ?? 0}` : "TBD"}
-          </p>
+          <p className="mt-1 font-bold text-turf">{hasMatchResult(match) ? actualResultLabel(match) : 'TBD'}</p>
         </div>
       </div>
 
       <p className="mt-3 text-sm leading-6 text-emerald-950/70">
-        {match.stage_is_knockout
-          ? "Knockout fixture."
-          : "Group fixture."}
+        {match.stage_is_knockout ? 'Knockout fixture.' : 'Group fixture.'}
       </p>
 
-      {match.status === "SCHEDULED" ? (
-        <details
-          className="mt-4 rounded-[20px] border border-emerald-900/10 bg-emerald-50/70 p-3"
-        >
+      {match.status === 'SCHEDULED' ? (
+        <details className="mt-4 rounded-[20px] border border-emerald-900/10 bg-emerald-50/70 p-3">
           <summary className="cursor-pointer list-none text-sm font-semibold text-turf">
-            {match.prediction_id ? "Update prediction" : "Predict"}
+            {match.prediction_id ? 'Update prediction' : 'Predict'}
           </summary>
           <div className="mt-3">
             <PredictionForm match={match} teams={teams} memberRole={memberRole} compact />
           </div>
-        </details>
-      ) : null}
-      {memberRole === "MEMBER" && match.prediction_id ? (
-        <details className="mt-4 rounded-[20px] border border-amber-900/15 bg-amber-50/70 p-3">
-          <summary className="cursor-pointer list-none text-sm font-semibold text-amber-950">
-            Raise issue
-          </summary>
-          <form action={raisePredictionIssue} className="mt-3 space-y-3">
-            <input type="hidden" name="match_id" value={match.id} />
-            <textarea
-              name="reason"
-              className="field min-h-24"
-              placeholder="Explain the issue in a few words."
-              required
-            />
-            <p className="text-xs leading-5 text-amber-950/70">
-              If 2 or 3 members flag the same match, admin will review the audit.
-            </p>
-            <button type="submit" className="btn-secondary w-full">
-              Submit issue
-            </button>
-          </form>
         </details>
       ) : null}
     </article>
@@ -735,12 +764,8 @@ function LeaderboardCard({ data }: { data: DashboardData }) {
                   <div className="text-xs text-emerald-950/65">{row.email}</div>
                 </td>
                 <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
-                <td className="px-4 py-3 font-semibold text-turf">
-                  {currencyLabel(row.total_contributed)}
-                </td>
-                <td className="px-4 py-3 font-semibold text-turf">
-                  {currencyLabel(row.total_winnings)}
-                </td>
+                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_contributed)}</td>
+                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
                 <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.net_amount)}</td>
               </tr>
             ))}
@@ -751,13 +776,7 @@ function LeaderboardCard({ data }: { data: DashboardData }) {
   );
 }
 
-function AccountCard({
-  member,
-  errorMessage
-}: {
-  member: DashboardData["member"];
-  errorMessage?: string | null;
-}) {
+function AccountCard({ member, errorMessage }: { member: DashboardData['member']; errorMessage?: string | null }) {
   if (!member) {
     return null;
   }
@@ -778,37 +797,19 @@ function AccountCard({
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/70">
               Current password
             </label>
-            <input
-              type="password"
-              name="currentPassword"
-              autoComplete="current-password"
-              className="field"
-              required
-            />
+            <input type="password" name="currentPassword" autoComplete="current-password" className="field" required />
           </div>
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/70">
               New password
             </label>
-            <input
-              type="password"
-              name="newPassword"
-              autoComplete="new-password"
-              className="field"
-              required
-            />
+            <input type="password" name="newPassword" autoComplete="new-password" className="field" required />
           </div>
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/70">
               Confirm new password
             </label>
-            <input
-              type="password"
-              name="confirmPassword"
-              autoComplete="new-password"
-              className="field"
-              required
-            />
+            <input type="password" name="confirmPassword" autoComplete="new-password" className="field" required />
           </div>
           <button className="btn-secondary w-full">Change password</button>
         </form>
@@ -856,7 +857,7 @@ function GroupStandingsSection({ data }: { data: DashboardData }) {
                         <td className="px-2 py-2 text-base font-black text-turf">
                           <span className="flex flex-col">
                             <span className="text-sm font-black leading-tight">
-                              {row.flag_emoji ? `${row.flag_emoji} ` : ""}
+                              {row.flag_emoji ? `${row.flag_emoji} ` : ''}
                               {row.short_name || row.team_name}
                             </span>
                             {row.team_name !== (row.short_name || row.team_name) ? (
@@ -888,7 +889,7 @@ function GroupStandingsSection({ data }: { data: DashboardData }) {
 }
 
 function PrizePoolCard({ data }: { data: DashboardData }) {
-  const unresolvedPools = data.prizePools.filter((row) => row.status === "UNRESOLVED");
+  const unresolvedPools = data.prizePools.filter((row) => row.status === 'UNRESOLVED');
   const total = unresolvedPools.reduce((sum, row) => sum + Number(row.amount), 0);
   const activeSettlements = data.settlements.filter((row) => Number(row.current_amount) !== 0);
 
@@ -926,12 +927,12 @@ function PrizePoolCard({ data }: { data: DashboardData }) {
   );
 }
 
-function settlementBadgeClass(status: DashboardData["settlements"][number]["current_status"]) {
-  const map: Record<DashboardData["settlements"][number]["current_status"], string> = {
-    OPEN: "bg-amber-100 text-amber-900",
-    RECEIVE: "bg-emerald-100 text-emerald-900",
-    COLLECT: "bg-rose-100 text-rose-900",
-    ZERO: "bg-slate-100 text-slate-900"
+function settlementBadgeClass(status: DashboardData['settlements'][number]['current_status']) {
+  const map: Record<DashboardData['settlements'][number]['current_status'], string> = {
+    OPEN: 'bg-amber-100 text-amber-900',
+    RECEIVE: 'bg-emerald-100 text-emerald-900',
+    COLLECT: 'bg-rose-100 text-rose-900',
+    ZERO: 'bg-slate-100 text-slate-900',
   };
 
   return map[status];
@@ -946,14 +947,14 @@ function currentSettlementLabel(amount: number) {
     return `To collect ${currencyLabel(Math.abs(amount).toFixed(2))}`;
   }
 
-  return "Settled";
+  return 'Settled';
 }
 
 function SettlementStatusTable({ data }: { data: DashboardData }) {
-  if (data.member?.role !== "ADMIN") return null;
+  if (data.member?.role !== 'ADMIN') return null;
   const rows = [...data.settlements].sort((a, b) => {
-    if (a.current_status === "OPEN" && b.current_status !== "OPEN") return -1;
-    if (a.current_status !== "OPEN" && b.current_status === "OPEN") return 1;
+    if (a.current_status === 'OPEN' && b.current_status !== 'OPEN') return -1;
+    if (a.current_status !== 'OPEN' && b.current_status === 'OPEN') return 1;
     return a.rank - b.rank;
   });
 
@@ -977,7 +978,7 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
               rows
                 .filter((row) => Number(row.current_amount) > 0)
                 .reduce((sum, row) => sum + Number(row.current_amount), 0)
-                .toFixed(2)
+                .toFixed(2),
             )}
           </p>
         </div>
@@ -988,8 +989,8 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
               Math.abs(
                 rows
                   .filter((row) => Number(row.current_amount) < 0)
-                  .reduce((sum, row) => sum + Number(row.current_amount), 0)
-              ).toFixed(2)
+                  .reduce((sum, row) => sum + Number(row.current_amount), 0),
+              ).toFixed(2),
             )}
           </p>
         </div>
@@ -1011,65 +1012,65 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
           <tbody>
             {rows.map((row) => {
               const amount = Number(row.current_amount);
-              const isOpen = row.current_status === "OPEN";
+              const isOpen = row.current_status === 'OPEN';
 
               return (
-              <tr key={row.member_id} className="border-t border-emerald-900/5">
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-turf">{row.member_name}</div>
-                  <div className="text-xs text-emerald-950/60">{row.email}</div>
-                </td>
-                <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
-                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
-                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_fees)}</td>
-                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.settled_amount)}</td>
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-turf">{currentSettlementLabel(amount)}</div>
-                  {row.last_finalized_at ? (
-                    <div className="text-xs text-emerald-950/60">
-                      Finalized {formatNepalDateTime(row.last_finalized_at)}
-                    </div>
-                  ) : null}
-                  {row.last_settled_at ? (
-                    <div className="text-xs text-emerald-950/60">
-                      Settled {formatNepalDateTime(row.last_settled_at)}
-                    </div>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`badge ${settlementBadgeClass(row.current_status)}`}>
-                    {row.current_status === "OPEN"
-                      ? "Open"
-                      : row.current_status === "RECEIVE"
-                        ? "Ready to give"
-                        : row.current_status === "COLLECT"
-                          ? "Ready to collect"
-                          : "Settled"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {isOpen ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <form action={settleMemberSettlement} className="flex items-center gap-2">
-                        <input type="hidden" name="settlement_id" value={row.open_settlement_id ?? ""} />
-                        <button className="btn-secondary px-3 py-2 text-xs">Settle</button>
+                <tr key={row.member_id} className="border-t border-emerald-900/5">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-turf">{row.member_name}</div>
+                    <div className="text-xs text-emerald-950/60">{row.email}</div>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
+                  <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
+                  <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_fees)}</td>
+                  <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.settled_amount)}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-turf">{currentSettlementLabel(amount)}</div>
+                    {row.last_finalized_at ? (
+                      <div className="text-xs text-emerald-950/60">
+                        Finalized {formatNepalDateTime(row.last_finalized_at)}
+                      </div>
+                    ) : null}
+                    {row.last_settled_at ? (
+                      <div className="text-xs text-emerald-950/60">
+                        Settled {formatNepalDateTime(row.last_settled_at)}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`badge ${settlementBadgeClass(row.current_status)}`}>
+                      {row.current_status === 'OPEN'
+                        ? 'Open'
+                        : row.current_status === 'RECEIVE'
+                          ? 'Ready to give'
+                          : row.current_status === 'COLLECT'
+                            ? 'Ready to collect'
+                            : 'Settled'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {isOpen ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <form action={settleMemberSettlement} className="flex items-center gap-2">
+                          <input type="hidden" name="settlement_id" value={row.open_settlement_id ?? ''} />
+                          <button className="btn-secondary px-3 py-2 text-xs">Settle</button>
+                        </form>
+                        <form action={undoMemberSettlementFinalization} className="flex items-center gap-2">
+                          <input type="hidden" name="settlement_id" value={row.open_settlement_id ?? ''} />
+                          <button className="btn-secondary px-3 py-2 text-xs">Undo finalize</button>
+                        </form>
+                      </div>
+                    ) : amount !== 0 ? (
+                      <form action={finalizeMemberSettlement} className="flex items-center gap-2">
+                        <input type="hidden" name="member_id" value={row.member_id} />
+                        <input type="hidden" name="settlement_scope" value="MANUAL" />
+                        <button className="btn-secondary px-3 py-2 text-xs">Finalize</button>
                       </form>
-                      <form action={undoMemberSettlementFinalization} className="flex items-center gap-2">
-                        <input type="hidden" name="settlement_id" value={row.open_settlement_id ?? ""} />
-                        <button className="btn-secondary px-3 py-2 text-xs">Undo finalize</button>
-                      </form>
-                    </div>
-                  ) : amount !== 0 ? (
-                    <form action={finalizeMemberSettlement} className="flex items-center gap-2">
-                      <input type="hidden" name="member_id" value={row.member_id} />
-                      <input type="hidden" name="settlement_scope" value="MANUAL" />
-                      <button className="btn-secondary px-3 py-2 text-xs">Finalize</button>
-                    </form>
-                  ) : (
-                    <span className="text-xs font-medium text-emerald-950/50">No action</span>
-                  )}
-                </td>
-              </tr>
+                    ) : (
+                      <span className="text-xs font-medium text-emerald-950/50">No action</span>
+                    )}
+                  </td>
+                </tr>
               );
             })}
           </tbody>
@@ -1080,9 +1081,9 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
 }
 
 function PredictionIssueSection({ data }: { data: DashboardData }) {
-  if (data.member?.role !== "ADMIN") return null;
+  if (data.member?.role !== 'ADMIN') return null;
 
-  const openIssues = data.predictionIssueReports.filter((issue) => issue.status === "OPEN");
+  const openIssues = data.predictionIssueReports.filter((issue) => issue.status === 'OPEN');
 
   if (openIssues.length === 0) {
     return null;
@@ -1090,23 +1091,16 @@ function PredictionIssueSection({ data }: { data: DashboardData }) {
 
   return (
     <section className={cardClass()}>
-      <SectionTitle
-        title="Prediction issues"
-        subtitle="Shown while members have an open dispute or concern."
-      />
+      <SectionTitle title="Prediction issues" subtitle="Shown while members have an open dispute or concern." />
       <div className="space-y-3">
         {openIssues.map((issue) => (
           <div key={issue.id} className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-amber-950/60">
-                  {issue.match_label}
-                </p>
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-950/60">{issue.match_label}</p>
                 <h4 className="mt-1 font-bold text-amber-950">{issue.member_name}</h4>
                 <p className="mt-1 text-sm leading-6 text-amber-950/80">{issue.reason}</p>
-                <p className="mt-2 text-xs text-amber-950/60">
-                  Raised {formatNepalDateTime(issue.created_at)}
-                </p>
+                <p className="mt-2 text-xs text-amber-950/60">Raised {formatNepalDateTime(issue.created_at)}</p>
               </div>
               <form action={resolvePredictionIssue}>
                 <input type="hidden" name="issue_id" value={issue.id} />
@@ -1121,16 +1115,13 @@ function PredictionIssueSection({ data }: { data: DashboardData }) {
 }
 
 function PredictionAuditSection({ data }: { data: DashboardData }) {
-  if (data.member?.role !== "ADMIN") return null;
-  const openIssues = data.predictionIssueReports.filter((issue) => issue.status === "OPEN");
+  if (data.member?.role !== 'ADMIN') return null;
+  const openIssues = data.predictionIssueReports.filter((issue) => issue.status === 'OPEN');
   if (openIssues.length === 0) return null;
 
   return (
     <section className={cardClass()}>
-      <SectionTitle
-        title="Prediction audit"
-        subtitle="Visible only while an issue is open and needs review."
-      />
+      <SectionTitle title="Prediction audit" subtitle="Visible only while an issue is open and needs review." />
       <div className="overflow-x-auto rounded-[24px] border border-emerald-900/10 bg-white/80">
         <table className="min-w-[980px] w-full text-left text-sm">
           <thead className="bg-emerald-50 text-xs uppercase tracking-[0.18em] text-emerald-950/60">
@@ -1175,7 +1166,7 @@ function PredictionAuditSection({ data }: { data: DashboardData }) {
 }
 
 function ResultUpdateSection({ data }: { data: DashboardData }) {
-  if (data.member?.role !== "ADMIN") return null;
+  if (data.member?.role !== 'ADMIN') return null;
 
   const editableMatches = data.matches
     .filter((match) => canUpdateMatchResult(match))
@@ -1188,10 +1179,7 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
 
   return (
     <section className={cardClass()}>
-      <SectionTitle
-        title="Result update"
-        subtitle="Set the result first, then lock it once you are sure."
-      />
+      <SectionTitle title="Result update" subtitle="Set the result first, then lock it once you are sure." />
       <div className="space-y-4">
         {editableMatches.length === 0 ? (
           <p className="text-sm text-emerald-950/70">No matches are ready for result update yet.</p>
@@ -1208,9 +1196,7 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                 <input type="hidden" name="match_id" value={match.id} />
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-950/60">
-                      {match.stage_name}
-                    </p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-950/60">{match.stage_name}</p>
                     <h4 className="mt-1 font-bold text-turf">{matchLabel(match)}</h4>
                     <p className="mt-1 text-[11px] font-medium leading-4 text-emerald-950/60">
                       {match.home_team_name} vs {match.away_team_name}
@@ -1221,8 +1207,10 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`badge ${badgeForStatus(match.status)}`}>{match.status}</span>
-                    <span className={`badge ${locked ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
-                      {locked ? "Result locked" : "Draft result"}
+                    <span
+                      className={`badge ${locked ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}
+                    >
+                      {locked ? 'Result locked' : 'Draft result'}
                     </span>
                   </div>
                 </div>
@@ -1234,7 +1222,7 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                     min="0"
                     placeholder="Home score"
                     className="field"
-                    defaultValue={match.home_score ?? ""}
+                    defaultValue={match.home_score ?? ''}
                     disabled={homeDisabled}
                     required
                   />
@@ -1244,14 +1232,14 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                     min="0"
                     placeholder="Away score"
                     className="field"
-                    defaultValue={match.away_score ?? ""}
+                    defaultValue={match.away_score ?? ''}
                     disabled={homeDisabled}
                     required
                   />
                   <select
                     name="actual_outcome"
                     className="field"
-                    defaultValue={match.actual_outcome ?? ""}
+                    defaultValue={match.actual_outcome ?? ''}
                     disabled={homeDisabled}
                     required
                   >
@@ -1286,7 +1274,7 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                         min="0"
                         placeholder="ET home"
                         className="field"
-                        defaultValue={match.home_extra_score ?? ""}
+                        defaultValue={match.home_extra_score ?? ''}
                         disabled={homeDisabled}
                       />
                       <input
@@ -1295,13 +1283,13 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                         min="0"
                         placeholder="ET away"
                         className="field"
-                        defaultValue={match.away_extra_score ?? ""}
+                        defaultValue={match.away_extra_score ?? ''}
                         disabled={homeDisabled}
                       />
                       <select
                         name="winner_team_id"
                         className="field"
-                        defaultValue={match.winner_team_id ?? ""}
+                        defaultValue={match.winner_team_id ?? ''}
                         disabled={homeDisabled}
                       >
                         <option value="">Winner team</option>
@@ -1315,7 +1303,7 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
                       <select
                         name="penalty_winner_team_id"
                         className="field"
-                        defaultValue={match.penalty_winner_team_id ?? ""}
+                        defaultValue={match.penalty_winner_team_id ?? ''}
                         disabled={homeDisabled}
                       >
                         <option value="">Penalty winner</option>
@@ -1354,10 +1342,10 @@ function ResultUpdateSection({ data }: { data: DashboardData }) {
 }
 
 function AdminPanel({ data }: { data: DashboardData }) {
-  if (data.member?.role !== "ADMIN") return null;
+  if (data.member?.role !== 'ADMIN') return null;
 
-  const unresolvedPools = data.prizePools.filter((pool) => pool.status === "UNRESOLVED");
-  const editableFixtures = data.matches.filter((match) => match.status === "SCHEDULED");
+  const unresolvedPools = data.prizePools.filter((pool) => pool.status === 'UNRESOLVED');
+  const editableFixtures = data.matches.filter((match) => match.status === 'SCHEDULED');
 
   return (
     <section className={cardClass()}>
@@ -1381,7 +1369,9 @@ function AdminPanel({ data }: { data: DashboardData }) {
               <option value="">Home team</option>
               {data.teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
+                  {team.flag_emoji
+                    ? `${team.flag_emoji} ${team.short_name || team.name}`
+                    : team.short_name || team.name}
                 </option>
               ))}
             </select>
@@ -1389,7 +1379,9 @@ function AdminPanel({ data }: { data: DashboardData }) {
               <option value="">Away team</option>
               {data.teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
+                  {team.flag_emoji
+                    ? `${team.flag_emoji} ${team.short_name || team.name}`
+                    : team.short_name || team.name}
                 </option>
               ))}
             </select>
@@ -1446,8 +1438,8 @@ function AdminPanel({ data }: { data: DashboardData }) {
       <div className="mt-5 rounded-[24px] bg-white/80 p-4">
         <h4 className="font-bold text-turf">Edit Fixture</h4>
         <p className="mt-2 text-sm text-emerald-950/70">
-          Only scheduled fixtures can be edited. Locked, live, or completed fixtures can be
-          cancelled, but not retargeted.
+          Only scheduled fixtures can be edited. Locked, live, or completed fixtures can be cancelled, but not
+          retargeted.
         </p>
         <div className="mt-4 space-y-4">
           {editableFixtures.length === 0 ? (
@@ -1470,14 +1462,18 @@ function AdminPanel({ data }: { data: DashboardData }) {
                 <select name="home_team_id" className="field" defaultValue={match.home_team_id} required>
                   {data.teams.map((team) => (
                     <option key={team.id} value={team.id}>
-                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
+                      {team.flag_emoji
+                        ? `${team.flag_emoji} ${team.short_name || team.name}`
+                        : team.short_name || team.name}
                     </option>
                   ))}
                 </select>
                 <select name="away_team_id" className="field" defaultValue={match.away_team_id} required>
                   {data.teams.map((team) => (
                     <option key={team.id} value={team.id}>
-                  {team.flag_emoji ? `${team.flag_emoji} ${team.short_name || team.name}` : team.short_name || team.name}
+                      {team.flag_emoji
+                        ? `${team.flag_emoji} ${team.short_name || team.name}`
+                        : team.short_name || team.name}
                     </option>
                   ))}
                 </select>
@@ -1529,12 +1525,7 @@ function AdminPanel({ data }: { data: DashboardData }) {
                   defaultValue={pool.amount}
                   placeholder="Amount"
                 />
-                <input
-                  name="reason"
-                  className="field"
-                  defaultValue={pool.reason ?? ""}
-                  placeholder="Reason or note"
-                />
+                <input name="reason" className="field" defaultValue={pool.reason ?? ''} placeholder="Reason or note" />
                 <button className="btn-primary">Save</button>
               </form>
             ))
@@ -1585,7 +1576,7 @@ function AdminWorkspaceMenu() {
 export function DashboardShell({
   data,
   profileError,
-  predictionError
+  predictionError,
 }: {
   data: DashboardData;
   profileError?: string | null;
@@ -1594,7 +1585,7 @@ export function DashboardShell({
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 lg:px-8">
       <TopHeader data={data} />
-      {data.member?.role === "ADMIN" ? <AdminWorkspaceMenu /> : null}
+      {data.member?.role === 'ADMIN' ? <AdminWorkspaceMenu /> : null}
 
       <section id="predictions" className="space-y-6">
         {predictionError ? (
@@ -1604,10 +1595,10 @@ export function DashboardShell({
         ) : null}
         <UpcomingMatchCard
           matches={data.matches
-            .filter((match) => match.status !== "COMPLETED" && match.status !== "CANCELLED")
+            .filter((match) => match.status === 'SCHEDULED')
             .slice(0, 4)}
           teams={data.teams}
-          memberRole={data.member?.role ?? "MEMBER"}
+          memberRole={data.member?.role ?? 'MEMBER'}
           predictionSummaries={data.predictionSummaries}
         />
 
@@ -1620,7 +1611,7 @@ export function DashboardShell({
                 key={match.id}
                 match={match}
                 teams={data.teams}
-                memberRole={data.member?.role ?? "MEMBER"}
+                memberRole={data.member?.role ?? 'MEMBER'}
                 matchLeaderboards={data.matchLeaderboards}
                 predictionSummaries={data.predictionSummaries}
               />
@@ -1633,7 +1624,7 @@ export function DashboardShell({
         </div>
       </section>
 
-      {data.member?.role === "ADMIN" ? (
+      {data.member?.role === 'ADMIN' ? (
         <section id="admin-work" className="mt-8 space-y-6">
           <section className={cardClass()}>
             <SectionTitle title="Admin work" subtitle="Tools for results, settlements, and logs." />
@@ -1649,9 +1640,7 @@ export function DashboardShell({
         </section>
       ) : null}
 
-      <footer className="py-8 text-center text-sm text-emerald-950/60">
-        Private office pool.
-      </footer>
+      <footer className="py-8 text-center text-sm text-emerald-950/60">Private office pool.</footer>
     </main>
   );
 }

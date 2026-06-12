@@ -55,13 +55,17 @@ export function PredictionFormClient({
   teams,
   memberRole,
   compact = false,
-  initialHasPrediction
+  initialHasPrediction,
+  readOnly = false,
+  readOnlyButtonLabel = "View My Prediction",
 }: {
   match: MatchRow;
   teams: Team[];
   memberRole: "ADMIN" | "MEMBER";
   compact?: boolean;
   initialHasPrediction: boolean;
+  readOnly?: boolean;
+  readOnlyButtonLabel?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [hasPrediction, setHasPrediction] = useState(initialHasPrediction);
@@ -100,7 +104,7 @@ export function PredictionFormClient({
 
   const homeTeam = teams.find((team) => team.id === match.home_team_id) ?? null;
   const awayTeam = teams.find((team) => team.id === match.away_team_id) ?? null;
-  const disabled = match.status !== "SCHEDULED" || isSaving;
+  const disabled = readOnly || match.status !== "SCHEDULED" || isSaving;
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled) return;
@@ -175,7 +179,9 @@ export function PredictionFormClient({
         <span className={`badge ${hasPrediction ? "bg-amber-100 text-amber-900" : "bg-slate-200 text-slate-900"}`}>
           {hasPrediction
             ? `Already predicted${currentSummary ? `: ${currentSummary}` : ""}`
-            : "Open"}
+            : readOnly
+              ? "Locked"
+              : "Open"}
         </span>
       </div>
 
@@ -324,12 +330,25 @@ export function PredictionFormClient({
         </div>
       ) : null}
 
-      <button type="submit" className="btn-primary w-full" disabled={disabled}>
-        {isSaving ? "Saving..." : hasPrediction ? "Update prediction" : "Submit prediction"}
-      </button>
-      <p className="text-xs leading-5 text-emerald-950/70">
-        {match.status === "SCHEDULED" ? "You can change it until lock." : "Prediction is locked."}
-      </p>
+      {!readOnly ? (
+        <>
+          <button type="submit" className="btn-primary w-full" disabled={disabled}>
+            {isSaving ? "Saving..." : hasPrediction ? "Update prediction" : "Submit prediction"}
+          </button>
+          <p className="text-xs leading-5 text-emerald-950/70">
+            {match.status === "SCHEDULED" ? "You can change it until lock." : "Prediction is locked."}
+          </p>
+        </>
+      ) : (
+        <>
+          <button type="button" className="btn-secondary w-full opacity-90" disabled>
+            {hasPrediction ? readOnlyButtonLabel : "Prediction locked"}
+          </button>
+          <p className="text-xs leading-5 text-emerald-950/70">
+            This prediction is locked and shown for reference only.
+          </p>
+        </>
+      )}
     </form>
   );
 }
