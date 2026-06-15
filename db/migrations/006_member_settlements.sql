@@ -60,9 +60,14 @@ as $$
   fees as (
     select member_id, coalesce(sum(amount), 0) as total_fees
     from contributions c
-    join matches m on m.id = c.match_id
+    join (
+      select distinct match_id
+      from prize_distributions
+      union
+      select distinct match_id
+      from unresolved_pools
+    ) settled_matches on settled_matches.match_id = c.match_id
     where payment_status in ('PENDING', 'PAID')
-      and m.status = 'COMPLETED'
     group by member_id
   ),
   settled as (
@@ -156,10 +161,15 @@ begin
 
   select coalesce(sum(amount), 0) into v_total_fees
   from contributions c
-  join matches m on m.id = c.match_id
-  where member_id = p_member_id
-    and payment_status in ('PENDING', 'PAID')
-    and m.status = 'COMPLETED';
+  join (
+    select distinct match_id
+    from prize_distributions
+    union
+    select distinct match_id
+    from unresolved_pools
+  ) settled_matches on settled_matches.match_id = c.match_id
+  where c.member_id = p_member_id
+    and payment_status in ('PENDING', 'PAID');
 
   select coalesce(sum(net_amount), 0) into v_settled_amount
   from member_settlements

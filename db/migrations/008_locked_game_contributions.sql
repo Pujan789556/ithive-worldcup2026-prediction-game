@@ -17,8 +17,15 @@ as $$
     group by member_id
   ),
   contributed as (
-    select member_id, coalesce(sum(amount), 0) as total_contributed
-    from contributions
+    select c.member_id, coalesce(sum(c.amount), 0) as total_contributed
+    from contributions c
+    join (
+      select distinct match_id
+      from prize_distributions
+      union
+      select distinct match_id
+      from unresolved_pools
+    ) settled_matches on settled_matches.match_id = c.match_id
     group by member_id
   ),
   winnings as (
@@ -80,8 +87,15 @@ as $$
     group by member_id
   ),
   fees as (
-    select member_id, coalesce(sum(amount), 0) as total_fees
-    from contributions
+    select c.member_id, coalesce(sum(c.amount), 0) as total_fees
+    from contributions c
+    join (
+      select distinct match_id
+      from prize_distributions
+      union
+      select distinct match_id
+      from unresolved_pools
+    ) settled_matches on settled_matches.match_id = c.match_id
     group by member_id
   ),
   settled as (
@@ -174,8 +188,15 @@ begin
   where member_id = p_member_id;
 
   select coalesce(sum(amount), 0) into v_total_fees
-  from contributions
-  where member_id = p_member_id;
+  from contributions c
+  join (
+    select distinct match_id
+    from prize_distributions
+    union
+    select distinct match_id
+    from unresolved_pools
+  ) settled_matches on settled_matches.match_id = c.match_id
+  where c.member_id = p_member_id;
 
   select coalesce(sum(net_amount), 0) into v_settled_amount
   from member_settlements

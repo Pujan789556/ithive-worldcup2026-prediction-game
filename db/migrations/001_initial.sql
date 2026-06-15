@@ -532,9 +532,12 @@ as $$
   contributed as (
     select member_id, coalesce(sum(amount), 0) as total_contributed
     from contributions c
-    join matches m on m.id = c.match_id
+    join (
+      select distinct match_id from prize_distributions
+      union
+      select distinct match_id from unresolved_pools
+    ) settled_matches on settled_matches.match_id = c.match_id
     where payment_status in ('PENDING', 'PAID')
-      and m.status = 'COMPLETED'
     group by member_id
   ),
   winnings as (

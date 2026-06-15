@@ -962,41 +962,35 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
     if (a.current_status !== 'OPEN' && b.current_status === 'OPEN') return 1;
     return a.rank - b.rank;
   });
+  const matchRows = data.matchLeaderboards.flatMap((block) => block.rows);
+  const toGive = matchRows.filter((row) => Number(row.net_amount) > 0).reduce((sum, row) => sum + Number(row.net_amount), 0);
+  const toCollect = Math.abs(
+    matchRows.filter((row) => Number(row.net_amount) < 0).reduce((sum, row) => sum + Number(row.net_amount), 0),
+  );
+  const totalNet = matchRows.reduce((sum, row) => sum + Number(row.net_amount), 0);
 
   return (
     <section className={cardClass()}>
       <SectionTitle
         title="Settlement status"
-        subtitle="Review each member's current balance, finalize it, then settle it once payment changes hands."
+        subtitle="Totals are based on the individual game leaderboards."
       />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-[24px] bg-emerald-50 p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-950/60">Members to settle</p>
           <p className="mt-2 text-3xl font-black text-turf">
-            {rows.filter((row) => Number(row.current_amount) !== 0).length}
+            {matchRows.filter((row) => Number(row.net_amount) !== 0).length}
           </p>
         </div>
         <div className="rounded-[24px] bg-amber-50 p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-amber-950/60">To give</p>
-          <p className="mt-2 text-3xl font-black text-amber-900">
-            {currencyLabel(
-              rows
-                .filter((row) => Number(row.current_amount) > 0)
-                .reduce((sum, row) => sum + Number(row.current_amount), 0)
-                .toFixed(2),
-            )}
-          </p>
+          <p className="mt-2 text-3xl font-black text-amber-900">{currencyLabel(toGive.toFixed(2))}</p>
         </div>
         <div className="rounded-[24px] bg-rose-50 p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-rose-950/60">To collect</p>
-          <p className="mt-2 text-3xl font-black text-rose-900">
-            {currencyLabel(
-              Math.abs(
-                rows
-                  .filter((row) => Number(row.current_amount) < 0)
-                  .reduce((sum, row) => sum + Number(row.current_amount), 0),
-              ).toFixed(2),
-            )}
+          <p className="mt-2 text-3xl font-black text-rose-900">{currencyLabel(toCollect.toFixed(2))}</p>
+          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-rose-950/55">
+            Net {currencyLabel(totalNet.toFixed(2))}
           </p>
         </div>
       </div>

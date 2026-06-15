@@ -21,6 +21,11 @@ as $$
     from match_scores
     where match_id = p_match_id
   ),
+  score_totals as (
+    select coalesce(sum(total_points), 0) as total_points_sum
+    from match_scores
+    where match_id = p_match_id
+  ),
   contributions as (
     select member_id, coalesce(amount, 0) as total_contributed
     from contributions
@@ -39,7 +44,10 @@ as $$
     coalesce(s.total_points, 0)::int as total_points,
     coalesce(c.total_contributed, 0)::numeric(12,2) as total_contributed,
     coalesce(w.total_winnings, 0)::numeric(12,2) as total_winnings,
-    (coalesce(w.total_winnings, 0) - coalesce(c.total_contributed, 0))::numeric(12,2) as net_amount,
+    case
+      when coalesce(st.total_points_sum, 0) = 0 then 0::numeric(12,2)
+      else (coalesce(w.total_winnings, 0) - coalesce(c.total_contributed, 0))::numeric(12,2)
+    end as net_amount,
     row_number() over (
       order by coalesce(s.total_points, 0) desc,
                coalesce(w.total_winnings, 0) desc,
@@ -48,6 +56,7 @@ as $$
     )::int as rank
   from member_rows m
   left join scores s on s.member_id = m.id
+  cross join score_totals st
   left join contributions c on c.member_id = m.id
   left join winnings w on w.member_id = m.id
   order by rank asc;

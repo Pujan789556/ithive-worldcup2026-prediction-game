@@ -191,6 +191,8 @@ declare
   v_total_pool numeric(12,2);
   v_total_points int;
   v_score record;
+  v_remainder numeric(12,2);
+  v_top_member uuid;
 begin
   delete from prize_distributions where match_id = p_match_id;
   delete from unresolved_pools where match_id = p_match_id;
@@ -236,6 +238,26 @@ begin
         prize_amount = excluded.prize_amount,
         created_at = now();
     end loop;
+
+    select round(v_total_pool - coalesce(sum(prize_amount), 0), 2)
+    into v_remainder
+    from prize_distributions
+    where match_id = p_match_id;
+
+    if coalesce(v_remainder, 0) <> 0 then
+      select ms.member_id
+      into v_top_member
+      from match_scores ms
+      where ms.match_id = p_match_id
+      order by ms.total_points desc, ms.member_id asc
+      limit 1;
+
+      update prize_distributions
+      set prize_amount = round((prize_amount + v_remainder)::numeric, 2),
+          created_at = now()
+      where match_id = p_match_id
+        and member_id = v_top_member;
+    end if;
   else
     insert into unresolved_pools (match_id, amount, reason, status, created_at)
     values (p_match_id, v_total_pool, 'No points were scored, so the pool stays unresolved.', 'UNRESOLVED', now());
