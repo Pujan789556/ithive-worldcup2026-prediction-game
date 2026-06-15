@@ -42,8 +42,14 @@ as $$
     m.full_name,
     m.email,
     coalesce(s.total_points, 0)::int as total_points,
-    coalesce(c.total_contributed, 0)::numeric(12,2) as total_contributed,
-    coalesce(w.total_winnings, 0)::numeric(12,2) as total_winnings,
+    case
+      when coalesce(st.total_points_sum, 0) = 0 then 0::numeric(12,2)
+      else coalesce(c.total_contributed, 0)::numeric(12,2)
+    end as total_contributed,
+    case
+      when coalesce(st.total_points_sum, 0) = 0 then 0::numeric(12,2)
+      else coalesce(w.total_winnings, 0)::numeric(12,2)
+    end as total_winnings,
     case
       when coalesce(st.total_points_sum, 0) = 0 then 0::numeric(12,2)
       else (coalesce(w.total_winnings, 0) - coalesce(c.total_contributed, 0))::numeric(12,2)

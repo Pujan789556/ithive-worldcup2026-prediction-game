@@ -534,8 +534,6 @@ as $$
     from contributions c
     join (
       select distinct match_id from prize_distributions
-      union
-      select distinct match_id from unresolved_pools
     ) settled_matches on settled_matches.match_id = c.match_id
     where payment_status in ('PENDING', 'PAID')
     group by member_id

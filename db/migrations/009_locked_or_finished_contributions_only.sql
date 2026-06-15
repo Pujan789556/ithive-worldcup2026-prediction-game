@@ -22,9 +22,6 @@ as $$
     join (
       select distinct match_id
       from prize_distributions
-      union
-      select distinct match_id
-      from unresolved_pools
     ) settled_matches on settled_matches.match_id = c.match_id
     group by c.member_id
   ),
@@ -92,9 +89,6 @@ as $$
     join (
       select distinct match_id
       from prize_distributions
-      union
-      select distinct match_id
-      from unresolved_pools
     ) settled_matches on settled_matches.match_id = c.match_id
     group by c.member_id
   ),
@@ -192,9 +186,6 @@ begin
   join (
     select distinct match_id
     from prize_distributions
-    union
-    select distinct match_id
-    from unresolved_pools
   ) settled_matches on settled_matches.match_id = c.match_id
   where c.member_id = p_member_id;
 

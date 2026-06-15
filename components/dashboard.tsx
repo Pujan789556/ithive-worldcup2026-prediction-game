@@ -962,12 +962,11 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
     if (a.current_status !== 'OPEN' && b.current_status === 'OPEN') return 1;
     return a.rank - b.rank;
   });
-  const matchRows = data.matchLeaderboards.flatMap((block) => block.rows);
-  const toGive = matchRows.filter((row) => Number(row.net_amount) > 0).reduce((sum, row) => sum + Number(row.net_amount), 0);
-  const toCollect = Math.abs(
-    matchRows.filter((row) => Number(row.net_amount) < 0).reduce((sum, row) => sum + Number(row.net_amount), 0),
-  );
-  const totalNet = matchRows.reduce((sum, row) => sum + Number(row.net_amount), 0);
+  const nonFinalizedRows = rows.filter((row) => row.current_status === 'RECEIVE' || row.current_status === 'COLLECT');
+  const nonFinalizedBalances = nonFinalizedRows.map((row) => Number(row.current_amount));
+  const toGive = nonFinalizedBalances.filter((amount) => amount > 0).reduce((sum, amount) => sum + amount, 0);
+  const toCollect = Math.abs(nonFinalizedBalances.filter((amount) => amount < 0).reduce((sum, amount) => sum + amount, 0));
+  const totalNet = nonFinalizedBalances.reduce((sum, amount) => sum + amount, 0);
 
   return (
     <section className={cardClass()}>
@@ -979,7 +978,7 @@ function SettlementStatusTable({ data }: { data: DashboardData }) {
         <div className="rounded-[24px] bg-emerald-50 p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-950/60">Members to settle</p>
           <p className="mt-2 text-3xl font-black text-turf">
-            {matchRows.filter((row) => Number(row.net_amount) !== 0).length}
+            {nonFinalizedRows.length}
           </p>
         </div>
         <div className="rounded-[24px] bg-amber-50 p-5">
