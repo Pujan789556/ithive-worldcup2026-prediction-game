@@ -88,6 +88,6 @@ Sample members, groups, teams, and fixtures live in `db/seed.sql`.
 - The seeded temporary password is only for first login.
 - The current development seed password is `Office@2026`.
 - Users must change their password on first login before they can join the dashboard.
-- To reset a forgotten password, generate a new bcrypt hash, update `members.password_hash`, and set `must_change_password = true`.
+- Admin can reset a member password from the dashboard; the app sets `must_change_password = true` so the member must choose a new password on next login.
 - Do not commit real user emails or real temporary passwords to a public repo.
 - Change the seeded temporary password before real use or generate hashed passwords manually.

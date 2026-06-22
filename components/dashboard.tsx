@@ -14,6 +14,7 @@ import {
   logout,
   raisePredictionIssue,
   resolvePredictionIssue,
+  resetMemberPassword,
   undoMemberSettlementFinalization,
   settleMemberSettlement,
   syncLocks,
@@ -185,6 +186,11 @@ function badgeForStatus(status: MatchRow['status']) {
   return map[status];
 }
 
+function memberRoleLabel(role: NonNullable<DashboardData['member']>['role']) {
+  if (role === 'ADMIN') return 'Admin';
+  return 'Player';
+}
+
 export function LoginCard({ errorMessage }: { errorMessage?: string | null }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-8">
@@ -329,7 +335,7 @@ function TopHeader({ data }: { data: DashboardData }) {
   return (
     <header className="mb-6 flex flex-col gap-4 rounded-[32px] bg-turf px-5 py-5 text-chalk shadow-soft md:flex-row md:items-center md:justify-between md:px-7">
       <div>
-        <span className="badge bg-white/10 text-chalk">{data.member.role === 'ADMIN' ? 'Admin' : 'Player'}</span>
+        <span className="badge bg-white/10 text-chalk">{memberRoleLabel(data.member.role)}</span>
         <h2 className="pitch-title mt-3 text-3xl font-black tracking-tight">
           Hey {data.member.full_name.split(' ')[0]}, ready for kickoff?
         </h2>
@@ -1344,6 +1350,7 @@ function AdminPanel({ data }: { data: DashboardData }) {
 
   const unresolvedPools = data.prizePools.filter((pool) => pool.status === 'UNRESOLVED');
   const editableFixtures = data.matches.filter((match) => match.status === 'SCHEDULED');
+  const resettableMembers = data.members.filter((member) => member.id !== data.member?.id);
 
   return (
     <section className={cardClass()}>
@@ -1530,6 +1537,68 @@ function AdminPanel({ data }: { data: DashboardData }) {
           )}
         </div>
       </div>
+
+      {data.member?.role === 'ADMIN' ? (
+        <div className="mt-5 rounded-[24px] bg-white/80 p-4">
+          <h4 className="font-bold text-turf">Member password resets</h4>
+          <p className="mt-2 text-sm text-emerald-950/70">
+            Set a temporary password for a member and force a change on their next login.
+          </p>
+          <div className="mt-4 space-y-3">
+            {resettableMembers.length === 0 ? (
+              <p className="text-sm text-emerald-950/70">No members available for reset.</p>
+            ) : (
+              resettableMembers.map((member) => (
+                <form
+                  key={member.id}
+                  action={resetMemberPassword}
+                  className="grid gap-3 rounded-[20px] bg-emerald-50 p-3 md:grid-cols-[1.1fr_1fr_1fr_auto]"
+                >
+                  <input type="hidden" name="member_id" value={member.id} />
+                  <div className="rounded-2xl bg-white px-3 py-2">
+                    <div className="font-semibold text-turf">{member.full_name}</div>
+                    <div className="text-xs text-emerald-950/65">{member.email}</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="badge bg-emerald-100 text-emerald-900">{memberRoleLabel(member.role)}</span>
+                      <span
+                        className={`badge ${
+                          member.must_change_password
+                            ? 'bg-amber-100 text-amber-900'
+                            : 'bg-slate-100 text-slate-900'
+                        }`}
+                      >
+                        {member.must_change_password ? 'Reset required' : 'Normal password'}
+                      </span>
+                      {member.is_active ? (
+                        <span className="badge bg-emerald-100 text-emerald-900">Active</span>
+                      ) : (
+                        <span className="badge bg-rose-100 text-rose-900">Inactive</span>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    name="temporary_password"
+                    type="password"
+                    className="field"
+                    placeholder="Temporary password"
+                    autoComplete="new-password"
+                    required
+                  />
+                  <input
+                    name="confirm_temporary_password"
+                    type="password"
+                    className="field"
+                    placeholder="Confirm password"
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button className="btn-primary">Reset password</button>
+                </form>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

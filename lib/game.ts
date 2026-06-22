@@ -1,7 +1,7 @@
 import "server-only";
 
 import { sql, typedSql } from "./server";
-import { getCurrentMember } from "./auth";
+import { getCurrentMember, type MemberRole } from "./auth";
 
 export type Stage = {
   id: string;
@@ -102,9 +102,20 @@ export type Member = {
   id: string;
   email: string;
   full_name: string;
-  role: "ADMIN" | "MEMBER";
+  role: MemberRole;
   is_active: boolean;
   must_change_password: boolean;
+};
+
+export type AdminMemberRow = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: MemberRole;
+  is_active: boolean;
+  must_change_password: boolean;
+  password_changed_at: string | null;
+  last_login_at: string | null;
 };
 
 export type MatchRow = {
@@ -220,6 +231,7 @@ export type PredictionIssueRow = {
 
 export type DashboardData = {
   member: Member | null;
+  members: AdminMemberRow[];
   groups: GroupRow[];
   stages: Stage[];
   teams: Team[];
@@ -331,6 +343,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   if (!member) {
       return {
       member: null,
+      members: [],
       groups: [],
       stages: [],
       teams: [],
@@ -342,16 +355,27 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       completedBreakdowns: [],
       leaderboard: [],
       settlements: [],
-      prizePools: [],
-      predictionAuditLogs: [],
-      predictionIssueReports: []
+    prizePools: [],
+    predictionAuditLogs: [],
+    predictionIssueReports: []
     };
   }
 
   await syncExpiredMatches();
 
-  const [groups, stages, teams, matches, leaderboard, settlements, prizePools, groupStandings, predictionAuditLogs, predictionIssueReports] =
-    await Promise.all([
+  const [
+    groups,
+    stages,
+    teams,
+    matches,
+    leaderboard,
+    settlements,
+    prizePools,
+    groupStandings,
+    predictionAuditLogs,
+    predictionIssueReports,
+    members
+  ] = await Promise.all([
     typedSql<GroupRow>`
       select id, code, name, sort_order
       from groups
@@ -441,7 +465,22 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     typedSql<GroupStandingRow>`select * from get_group_standings()`
     ,
     member.role === "ADMIN" ? fetchPredictionAuditLogs(25) : Promise.resolve([] as PredictionAuditRow[]),
-    member.role === "ADMIN" ? fetchPredictionIssueReports() : Promise.resolve([] as PredictionIssueRow[])
+    member.role === "ADMIN" ? fetchPredictionIssueReports() : Promise.resolve([] as PredictionIssueRow[]),
+    member.role === "ADMIN"
+      ? typedSql<AdminMemberRow>`
+          select
+            id,
+            email,
+            full_name,
+            role,
+            is_active,
+            must_change_password,
+            password_changed_at::text as password_changed_at,
+            last_login_at::text as last_login_at
+          from members
+          order by full_name asc, created_at asc
+        `
+      : Promise.resolve([] as AdminMemberRow[])
     ]);
 
   const predictionSummaries = await Promise.all(
@@ -474,6 +513,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
   return {
     member,
+    members,
     groups,
     stages,
     teams,

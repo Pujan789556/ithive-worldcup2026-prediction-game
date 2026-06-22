@@ -5,12 +5,13 @@ import { jwtVerify, SignJWT } from "jose";
 import { typedSql } from "./server";
 
 export type SessionType = "AUTHENTICATED" | "PASSWORD_CHANGE_REQUIRED";
+export type MemberRole = "ADMIN" | "MEMBER";
 
 export type SafeMember = {
   id: string;
   email: string;
   full_name: string;
-  role: "ADMIN" | "MEMBER";
+  role: MemberRole;
   must_change_password: boolean;
 };
 
@@ -21,7 +22,7 @@ export type CurrentMember = SafeMember & {
 type SessionClaims = {
   member_id: string;
   email: string;
-  role: "ADMIN" | "MEMBER";
+  role: MemberRole;
   session_type: SessionType;
 };
 
@@ -110,7 +111,7 @@ async function fetchMemberBySession(session: SessionClaims): Promise<CurrentMemb
 export async function createAuthenticatedSession(member: {
   id: string;
   email: string;
-  role: "ADMIN" | "MEMBER";
+  role: MemberRole;
 }) {
   await signSessionCookie(
     AUTH_COOKIE_NAME,
@@ -127,7 +128,7 @@ export async function createAuthenticatedSession(member: {
 export async function createPasswordChangeSession(member: {
   id: string;
   email: string;
-  role: "ADMIN" | "MEMBER";
+  role: MemberRole;
 }) {
   await signSessionCookie(
     PASSWORD_CHANGE_COOKIE_NAME,

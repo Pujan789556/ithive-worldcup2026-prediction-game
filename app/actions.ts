@@ -7,9 +7,10 @@ import {
   clearAuthCookies,
   createAuthenticatedSession,
   createPasswordChangeSession,
-  requireAdmin,
   requireAuth,
-  requirePasswordChangeSession
+  requirePasswordChangeSession,
+  requireAdmin,
+  type MemberRole
 } from "@/lib/auth";
 import {
   fetchCompletedMatchBreakdown,
@@ -129,7 +130,7 @@ export async function loginWithPassword(formData: FormData) {
     id: string;
     email: string;
     full_name: string;
-    role: "ADMIN" | "MEMBER";
+    role: MemberRole;
     is_active: boolean;
     password_hash: string;
     must_change_password: boolean;
@@ -323,6 +324,55 @@ export async function changePassword(formData: FormData) {
     set password_hash = ${newPasswordHash},
         must_change_password = false,
         password_changed_at = now(),
+        failed_login_attempts = 0,
+        locked_until = null,
+        updated_at = now()
+    where id = ${member.id}
+  `;
+
+  redirect("/");
+}
+
+export async function resetMemberPassword(formData: FormData) {
+  const admin = await requireAdmin();
+
+  const memberId = z.string().uuid().parse(formString(formData, "member_id"));
+  const temporaryPassword = newPasswordSchema.parse(formRawString(formData, "temporary_password"));
+  const confirmTemporaryPassword = passwordSchema.parse(formRawString(formData, "confirm_temporary_password"));
+
+  if (temporaryPassword !== confirmTemporaryPassword) {
+    throw new Error("Password reset failed.");
+  }
+
+  if (memberId === admin.id) {
+    throw new Error("Super admins cannot reset their own password from this panel.");
+  }
+
+  const memberRows = await typedSql<{
+    id: string;
+    email: string;
+    full_name: string;
+    is_active: boolean;
+    role: MemberRole;
+  }>`
+    select id, email, full_name, is_active, role
+    from members
+    where id = ${memberId}
+    limit 1
+  `;
+
+  const member = memberRows[0];
+  if (!member || !member.is_active) {
+    throw new Error("Member not found.");
+  }
+
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+  await sql`
+    update members
+    set password_hash = ${passwordHash},
+        must_change_password = true,
+        password_changed_at = null,
         failed_login_attempts = 0,
         locked_until = null,
         updated_at = now()
