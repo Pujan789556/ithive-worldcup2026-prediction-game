@@ -171,6 +171,7 @@ export type LeaderboardRow = {
   total_points: number;
   total_contributed: string;
   total_winnings: string;
+  current_amount: string;
   net_amount: string;
   rank: number;
 };
@@ -257,8 +258,17 @@ export async function fetchCurrentMember() {
 }
 
 export async function fetchLeaderboard() {
-  const rows = await typedSql<LeaderboardRow>`select * from get_leaderboard()`;
-  return rows;
+  const [leaderboardRows, settlementRows] = await Promise.all([
+    typedSql<LeaderboardRow>`select * from get_leaderboard()`,
+    typedSql<SettlementRow>`select * from get_member_settlement_statuses()`
+  ]);
+
+  const settlementAmountByMember = new Map(settlementRows.map((row) => [row.member_id, row.current_amount]));
+
+  return leaderboardRows.map((row) => ({
+    ...row,
+    current_amount: row.current_amount ?? settlementAmountByMember.get(row.member_id) ?? "0.00"
+  }));
 }
 
 export async function fetchGroupStandings() {
@@ -483,6 +493,12 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       : Promise.resolve([] as AdminMemberRow[])
     ]);
 
+  const settlementAmountByMember = new Map(settlements.map((row) => [row.member_id, row.current_amount]));
+  const normalizedLeaderboard = leaderboard.map((row) => ({
+    ...row,
+    current_amount: row.current_amount ?? settlementAmountByMember.get(row.member_id) ?? "0.00"
+  }));
+
   const predictionSummaries = await Promise.all(
     matches.map(async (match) => ({
       match_id: match.id,
@@ -523,7 +539,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     predictionSummaries,
     matchLeaderboards,
     completedBreakdowns,
-    leaderboard,
+    leaderboard: normalizedLeaderboard,
     settlements,
     prizePools,
     predictionAuditLogs,

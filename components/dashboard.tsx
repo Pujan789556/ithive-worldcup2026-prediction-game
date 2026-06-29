@@ -736,9 +736,9 @@ function MatchCard({
 function LeaderboardCard({ data }: { data: DashboardData }) {
   return (
     <section id="leaderboard" className={cardClass()}>
-      <SectionTitle title="Leaderboard" subtitle="Current standings." />
+      <SectionTitle title="Leaderboard" subtitle="Current standings with the current round amount." />
       <div className="overflow-x-auto rounded-[24px] border border-emerald-900/10 bg-white/80">
-        <table className="min-w-[760px] w-full text-left text-sm">
+        <table className="min-w-[880px] w-full text-left text-sm">
           <thead className="bg-emerald-50 text-xs uppercase tracking-[0.18em] text-emerald-950/60">
             <tr>
               <th className="px-4 py-3">Rank</th>
@@ -746,6 +746,7 @@ function LeaderboardCard({ data }: { data: DashboardData }) {
               <th className="px-4 py-3">Points</th>
               <th className="px-4 py-3">Contributed</th>
               <th className="px-4 py-3">Winnings</th>
+              <th className="px-4 py-3">Current round</th>
               <th className="px-4 py-3">Net</th>
             </tr>
           </thead>
@@ -760,6 +761,7 @@ function LeaderboardCard({ data }: { data: DashboardData }) {
                 <td className="px-4 py-3 font-semibold text-turf">{row.total_points}</td>
                 <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_contributed)}</td>
                 <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.total_winnings)}</td>
+                <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.current_amount)}</td>
                 <td className="px-4 py-3 font-semibold text-turf">{currencyLabel(row.net_amount)}</td>
               </tr>
             ))}
