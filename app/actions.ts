@@ -20,6 +20,7 @@ import {
   fetchMatchPredictionSummary,
   syncExpiredMatches
 } from "@/lib/game";
+import { parseNepalDateTimeInput } from "@/lib/time";
 import { sql, typedSql } from "@/lib/server";
 
 const emailSchema = z.string().email().max(320);
@@ -61,11 +62,6 @@ function formNumber(formData: FormData, key: string) {
 function formBoolean(formData: FormData, key: string) {
   const value = formData.get(key);
   return value === "on" || value === "true" || value === "1";
-}
-
-function parseLocalDateTimeInput(value: string) {
-  const parsed = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).parse(value);
-  return new Date(parsed).toISOString();
 }
 
 function genericAuthRedirect() {
@@ -807,7 +803,7 @@ export async function createFixture(formData: FormData) {
   const stageId = z.string().uuid().parse(formString(formData, "stage_id"));
   const homeTeamId = z.string().uuid().parse(formString(formData, "home_team_id"));
   const awayTeamId = z.string().uuid().parse(formString(formData, "away_team_id"));
-  const kickoffAt = parseLocalDateTimeInput(formString(formData, "kickoff_at"));
+  const kickoffAt = parseNepalDateTimeInput(formString(formData, "kickoff_at"));
   const statusRaw = formString(formData, "status");
   const status =
     statusRaw === ""
@@ -863,7 +859,7 @@ export async function updateFixture(formData: FormData) {
   const stageId = z.string().uuid().parse(formString(formData, "stage_id"));
   const homeTeamId = z.string().uuid().parse(formString(formData, "home_team_id"));
   const awayTeamId = z.string().uuid().parse(formString(formData, "away_team_id"));
-  const kickoffAt = parseLocalDateTimeInput(formString(formData, "kickoff_at"));
+  const kickoffAt = parseNepalDateTimeInput(formString(formData, "kickoff_at"));
   const status = z.enum(["SCHEDULED", "CANCELLED"]).parse(formString(formData, "status") || "SCHEDULED");
 
   if (status !== "SCHEDULED") {

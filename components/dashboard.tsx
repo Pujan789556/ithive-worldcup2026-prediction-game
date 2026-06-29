@@ -2,6 +2,7 @@ import { Countdown } from './countdown';
 import { MatchLeaderboardModal } from './match-leaderboard-modal';
 import { MatchPredictionModal } from './match-prediction-modal';
 import { currencyLabel } from './dashboard-shared';
+import { formatNepalDateTime, toNepalDateTimeLocalValue } from '@/lib/time';
 import {
   cancelFixture,
   createFixture,
@@ -80,14 +81,6 @@ function TeamLabelStack({ team, align = 'left' }: { team: Team | null; align?: '
   );
 }
 
-function formatNepalDateTime(iso: string) {
-  return new Intl.DateTimeFormat('en-NP', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Kathmandu',
-  }).format(new Date(iso));
-}
-
 function resultReadyAt(match: MatchRow) {
   const kickoff = new Date(match.kickoff_at).getTime();
   if (Number.isNaN(kickoff)) {
@@ -163,16 +156,6 @@ function actualResultLabel(match: MatchRow) {
 
 function hasMatchResult(match: MatchRow) {
   return match.home_score !== null || match.away_score !== null || match.actual_outcome !== null;
-}
-
-function toDatetimeLocalValue(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function badgeForStatus(status: MatchRow['status']) {
@@ -1486,7 +1469,7 @@ function AdminPanel({ data }: { data: DashboardData }) {
                   name="kickoff_at"
                   type="datetime-local"
                   className="field"
-                  defaultValue={toDatetimeLocalValue(match.kickoff_at)}
+                  defaultValue={toNepalDateTimeLocalValue(match.kickoff_at)}
                   required
                 />
                 <input type="hidden" name="status" value="SCHEDULED" />
