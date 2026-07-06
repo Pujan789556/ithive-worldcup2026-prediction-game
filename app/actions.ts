@@ -64,6 +64,83 @@ function formBoolean(formData: FormData, key: string) {
   return value === "on" || value === "true" || value === "1";
 }
 
+function resolveWinnerTeamId(
+  homeTeamId: string,
+  awayTeamId: string,
+  homeScore: number,
+  awayScore: number
+) {
+  if (homeScore > awayScore) {
+    return homeTeamId;
+  }
+
+  if (awayScore > homeScore) {
+    return awayTeamId;
+  }
+
+  return null;
+}
+
+function resolveKnockoutFinalResult({
+  homeTeamId,
+  awayTeamId,
+  homeScore,
+  awayScore,
+  wentExtraTime,
+  homeExtraScore,
+  awayExtraScore,
+  wentPenalties,
+  penaltyWinnerTeamId,
+}: {
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number;
+  awayScore: number;
+  wentExtraTime: boolean;
+  homeExtraScore: number | null;
+  awayExtraScore: number | null;
+  wentPenalties: boolean;
+  penaltyWinnerTeamId: string | null;
+}) {
+  const regularTimeWinnerTeamId = resolveWinnerTeamId(homeTeamId, awayTeamId, homeScore, awayScore);
+  if (regularTimeWinnerTeamId) {
+    return {
+      winnerTeamId: regularTimeWinnerTeamId,
+      outcome: regularTimeWinnerTeamId === homeTeamId ? ("HOME_WIN" as const) : ("AWAY_WIN" as const),
+    };
+  }
+
+  if (!wentExtraTime) {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  if (homeExtraScore === null || awayExtraScore === null) {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  const extraTimeWinnerTeamId = resolveWinnerTeamId(
+    homeTeamId,
+    awayTeamId,
+    homeExtraScore,
+    awayExtraScore
+  );
+  if (extraTimeWinnerTeamId) {
+    return {
+      winnerTeamId: extraTimeWinnerTeamId,
+      outcome: extraTimeWinnerTeamId === homeTeamId ? ("HOME_WIN" as const) : ("AWAY_WIN" as const),
+    };
+  }
+
+  if (!wentPenalties || !penaltyWinnerTeamId) {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  return {
+    winnerTeamId: penaltyWinnerTeamId,
+    outcome: penaltyWinnerTeamId === homeTeamId ? ("HOME_WIN" as const) : ("AWAY_WIN" as const),
+  };
+}
+
 function genericAuthRedirect() {
   redirect("/?auth_error=1");
 }
@@ -475,10 +552,71 @@ export async function storePrediction(memberId: string, formData: FormData) {
   let resolvedWinnerTeamId = predictedWinnerTeamId;
 
   if (match.stage_is_knockout) {
-    if (resolvedWinnerTeamId !== match.home_team_id && resolvedWinnerTeamId !== match.away_team_id) {
-      throw new Error("Pick a winner for the knockout match.");
+    if (predictedHomeScore === null || predictedAwayScore === null) {
+      throw new Error("Enter both scores for the knockout match.");
     }
-    resolvedOutcome = resolvedWinnerTeamId === match.home_team_id ? "HOME_WIN" : "AWAY_WIN";
+
+    const regularTimeWinnerTeamId = resolveWinnerTeamId(
+      match.home_team_id,
+      match.away_team_id,
+      predictedHomeScore,
+      predictedAwayScore
+    );
+
+    if (regularTimeWinnerTeamId) {
+      if (predictsExtraTime || predictsPenalties || predictedHomeExtraScore !== null || predictedAwayExtraScore !== null || predictedPenaltyWinnerTeamId) {
+        throw new Error("Extra time and penalties are only available when regular time is tied.");
+      }
+      resolvedWinnerTeamId = regularTimeWinnerTeamId;
+      resolvedOutcome = regularTimeWinnerTeamId === match.home_team_id ? "HOME_WIN" : "AWAY_WIN";
+    } else {
+      let resolvedTieWinnerTeamId: string | null = null;
+
+      if (predictsExtraTime) {
+        if (predictedHomeExtraScore === null || predictedAwayExtraScore === null) {
+          throw new Error("Enter extra-time scores when the knockout match is tied.");
+        }
+
+        const extraTimeWinnerTeamId = resolveWinnerTeamId(
+          match.home_team_id,
+          match.away_team_id,
+          predictedHomeExtraScore,
+          predictedAwayExtraScore
+        );
+
+        if (extraTimeWinnerTeamId) {
+          if (predictsPenalties || predictedPenaltyWinnerTeamId) {
+            throw new Error("Penalty winner is only needed when extra time is tied.");
+          }
+          resolvedTieWinnerTeamId = extraTimeWinnerTeamId;
+        } else if (predictsPenalties) {
+          if (!predictedPenaltyWinnerTeamId) {
+            throw new Error("Pick the penalty winner when extra time is tied.");
+          }
+          if (
+            predictedPenaltyWinnerTeamId !== match.home_team_id &&
+            predictedPenaltyWinnerTeamId !== match.away_team_id
+          ) {
+            throw new Error("Penalty winner must be one of the knockout teams.");
+          }
+          resolvedTieWinnerTeamId = predictedPenaltyWinnerTeamId;
+        }
+      }
+
+      if (!resolvedTieWinnerTeamId) {
+        if (predictedWinnerTeamId && predictedWinnerTeamId !== match.home_team_id && predictedWinnerTeamId !== match.away_team_id) {
+          throw new Error("Winner team must be one of the knockout teams.");
+        }
+        resolvedTieWinnerTeamId = predictedWinnerTeamId;
+      }
+
+      if (!resolvedTieWinnerTeamId) {
+        throw new Error("Tied knockout predictions must include a winner team.");
+      }
+
+      resolvedWinnerTeamId = resolvedTieWinnerTeamId;
+      resolvedOutcome = resolvedTieWinnerTeamId === match.home_team_id ? "HOME_WIN" : "AWAY_WIN";
+    }
   } else {
     if (!resolvedOutcome) {
       if (predictedHomeScore === null || predictedAwayScore === null) {
@@ -641,26 +779,61 @@ export async function finalizeMatchResult(formData: FormData) {
     homeScore > awayScore ? "HOME_WIN" : awayScore > homeScore ? "AWAY_WIN" : "DRAW";
 
   if (match.stage_is_knockout) {
-    if (!winnerTeamId) {
-      throw new Error("Knockout matches require a winner.");
-    }
     if (actualOutcome === "DRAW") {
       throw new Error("Knockout matches cannot end in a draw.");
     }
-    if (!wentExtraTime && !wentPenalties && actualOutcome !== derivedOutcome) {
-      throw new Error("Knockout results without extra time or penalties must match the regular-time score.");
+
+    const resolvedFinalResult = resolveKnockoutFinalResult({
+      homeTeamId: match.home_team_id,
+      awayTeamId: match.away_team_id,
+      homeScore,
+      awayScore,
+      wentExtraTime,
+      homeExtraScore,
+      awayExtraScore,
+      wentPenalties,
+      penaltyWinnerTeamId,
+    });
+
+    if (!resolvedFinalResult.winnerTeamId) {
+      if (homeScore === awayScore && !wentExtraTime) {
+        throw new Error("Knockout matches tied at full time must go to extra time.");
+      }
+      if (homeScore === awayScore && wentExtraTime && homeExtraScore === awayExtraScore && !wentPenalties) {
+        throw new Error("Penalty winner is required when extra time is tied.");
+      }
+      throw new Error("Knockout result is incomplete.");
     }
-    if (actualOutcome === "HOME_WIN" && winnerTeamId !== match.home_team_id) {
-      throw new Error("Winner team must match the actual outcome.");
+
+    if (homeScore !== awayScore) {
+      if (wentExtraTime || wentPenalties || homeExtraScore !== null || awayExtraScore !== null || penaltyWinnerTeamId) {
+        throw new Error("Extra time and penalties are only available when regular time is tied.");
+      }
+    } else if (wentExtraTime && homeExtraScore !== null && awayExtraScore !== null && homeExtraScore !== awayExtraScore) {
+      if (wentPenalties || penaltyWinnerTeamId) {
+        throw new Error("Penalty winner is only needed when extra time is tied.");
+      }
     }
-    if (actualOutcome === "AWAY_WIN" && winnerTeamId !== match.away_team_id) {
-      throw new Error("Winner team must match the actual outcome.");
+
+    if (actualOutcome !== resolvedFinalResult.outcome) {
+      throw new Error("Knockout result must follow the score, extra time, and penalty order.");
+    }
+
+    if (winnerTeamId !== resolvedFinalResult.winnerTeamId) {
+      throw new Error("Winner team must match the final result.");
+    }
+
+    if (!wentExtraTime && (homeExtraScore !== null || awayExtraScore !== null)) {
+      throw new Error("Extra-time scores must be empty unless the match went to extra time.");
+    }
+    if (wentExtraTime && (homeExtraScore === null || awayExtraScore === null)) {
+      throw new Error("Enter extra-time scores when the match goes to extra time.");
+    }
+    if (!wentPenalties && penaltyWinnerTeamId) {
+      throw new Error("Penalty winner must be empty unless the match goes to penalties.");
     }
     if (wentPenalties && !penaltyWinnerTeamId) {
       throw new Error("Penalty winner is required when the match goes to penalties.");
-    }
-    if (wentPenalties && penaltyWinnerTeamId && penaltyWinnerTeamId !== winnerTeamId) {
-      throw new Error("Penalty winner must match the final winner.");
     }
   } else {
     if (actualOutcome !== derivedOutcome) {

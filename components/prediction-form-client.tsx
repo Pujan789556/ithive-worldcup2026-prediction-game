@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { MatchRow, Team } from "@/lib/game";
 import { PredictionOutcomePreview } from "./prediction-outcome-preview";
 
@@ -50,6 +50,79 @@ function TeamStack({
   );
 }
 
+function resolveKnockoutPrediction({
+  homeTeamId,
+  awayTeamId,
+  homeScore,
+  awayScore,
+  predictsExtraTime,
+  extraTimeHomeScore,
+  extraTimeAwayScore,
+  predictsPenalties,
+  fallbackWinnerTeamId,
+  penaltyWinnerTeamId,
+}: {
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number | "";
+  awayScore: number | "";
+  predictsExtraTime: boolean;
+  extraTimeHomeScore: number | "";
+  extraTimeAwayScore: number | "";
+  predictsPenalties: boolean;
+  fallbackWinnerTeamId: string | null;
+  penaltyWinnerTeamId: string;
+}) {
+  if (homeScore === "" || awayScore === "") {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  if (homeScore > awayScore) {
+    return { winnerTeamId: homeTeamId, outcome: "HOME_WIN" as const };
+  }
+
+  if (awayScore > homeScore) {
+    return { winnerTeamId: awayTeamId, outcome: "AWAY_WIN" as const };
+  }
+
+  if (!predictsExtraTime || extraTimeHomeScore === "" || extraTimeAwayScore === "") {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  if (extraTimeHomeScore > extraTimeAwayScore) {
+    return { winnerTeamId: homeTeamId, outcome: "HOME_WIN" as const };
+  }
+
+  if (extraTimeAwayScore > extraTimeHomeScore) {
+    return { winnerTeamId: awayTeamId, outcome: "AWAY_WIN" as const };
+  }
+
+  if (!predictsExtraTime) {
+    if (fallbackWinnerTeamId === homeTeamId) {
+      return { winnerTeamId: homeTeamId, outcome: "HOME_WIN" as const };
+    }
+
+    if (fallbackWinnerTeamId === awayTeamId) {
+      return { winnerTeamId: awayTeamId, outcome: "AWAY_WIN" as const };
+    }
+
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  if (!predictsPenalties || !penaltyWinnerTeamId) {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  if (penaltyWinnerTeamId !== homeTeamId && penaltyWinnerTeamId !== awayTeamId) {
+    return { winnerTeamId: null, outcome: null };
+  }
+
+  return {
+    winnerTeamId: penaltyWinnerTeamId,
+    outcome: penaltyWinnerTeamId === homeTeamId ? ("HOME_WIN" as const) : ("AWAY_WIN" as const)
+  };
+}
+
 export function PredictionFormClient({
   match,
   teams,
@@ -71,13 +144,6 @@ export function PredictionFormClient({
   const [hasPrediction, setHasPrediction] = useState(initialHasPrediction);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [selectedWinner, setSelectedWinner] = useState<"home" | "away" | "">(
-    match.predicted_winner_team_id === match.home_team_id
-      ? "home"
-      : match.predicted_winner_team_id === match.away_team_id
-        ? "away"
-        : ""
-  );
   const [homeScore, setHomeScore] = useState<number | "">(
     match.stage_is_knockout ? match.predicted_home_score ?? "" : ""
   );
@@ -101,10 +167,123 @@ export function PredictionFormClient({
     match.predicted_winner_team_id
   );
   const [savedOutcome, setSavedOutcome] = useState<string | null>(match.predicted_outcome);
+  const previousNormalScoresRef = useRef<{ home: number | ""; away: number | "" }>({
+    home: match.stage_is_knockout ? match.predicted_home_score ?? "" : "",
+    away: match.stage_is_knockout ? match.predicted_away_score ?? "" : ""
+  });
 
-  const homeTeam = teams.find((team) => team.id === match.home_team_id) ?? null;
-  const awayTeam = teams.find((team) => team.id === match.away_team_id) ?? null;
   const disabled = readOnly || match.status !== "SCHEDULED" || isSaving;
+  const normalTimeFilled = homeScore !== "" && awayScore !== "";
+  const normalTimeTied = normalTimeFilled && homeScore === awayScore;
+  const extraTimeScoresFilled = extraTimeHomeScore !== "" && extraTimeAwayScore !== "";
+  const extraTimeTied = normalTimeTied && predictsExtraTime && extraTimeScoresFilled && extraTimeHomeScore === extraTimeAwayScore;
+  const knockoutPrediction = match.stage_is_knockout
+    ? resolveKnockoutPrediction({
+        homeTeamId: match.home_team_id,
+        awayTeamId: match.away_team_id,
+        homeScore,
+        awayScore,
+        predictsExtraTime,
+        extraTimeHomeScore,
+        extraTimeAwayScore,
+        predictsPenalties,
+        fallbackWinnerTeamId: savedWinnerTeamId,
+        penaltyWinnerTeamId
+      })
+    : null;
+
+  useEffect(() => {
+    if (!match.stage_is_knockout) {
+      return;
+    }
+
+    const previousNormalScores = previousNormalScoresRef.current;
+
+    if (!normalTimeFilled) {
+      if (predictsExtraTime) setPredictsExtraTime(false);
+      if (predictsPenalties) setPredictsPenalties(false);
+      if (extraTimeHomeScore !== "") setExtraTimeHomeScore("");
+      if (extraTimeAwayScore !== "") setExtraTimeAwayScore("");
+      if (penaltyWinnerTeamId !== "") setPenaltyWinnerTeamId("");
+      previousNormalScoresRef.current = { home: homeScore, away: awayScore };
+      return;
+    }
+
+    if (!normalTimeTied) {
+      if (predictsExtraTime) setPredictsExtraTime(false);
+      if (predictsPenalties) setPredictsPenalties(false);
+      if (extraTimeHomeScore !== "") setExtraTimeHomeScore("");
+      if (extraTimeAwayScore !== "") setExtraTimeAwayScore("");
+      if (penaltyWinnerTeamId !== "") setPenaltyWinnerTeamId("");
+      previousNormalScoresRef.current = { home: homeScore, away: awayScore };
+      return;
+    }
+
+    if (!predictsExtraTime) {
+      setPredictsExtraTime(true);
+    }
+
+    const shouldSeedExtraTime =
+      extraTimeHomeScore === "" ||
+      extraTimeAwayScore === "" ||
+      (previousNormalScores.home !== "" &&
+        previousNormalScores.away !== "" &&
+        extraTimeHomeScore === previousNormalScores.home &&
+        extraTimeAwayScore === previousNormalScores.away);
+
+    if (shouldSeedExtraTime) {
+      if (extraTimeHomeScore !== homeScore) setExtraTimeHomeScore(homeScore);
+      if (extraTimeAwayScore !== awayScore) setExtraTimeAwayScore(awayScore);
+    }
+
+    previousNormalScoresRef.current = { home: homeScore, away: awayScore };
+  }, [
+    match.stage_is_knockout,
+    normalTimeFilled,
+    normalTimeTied,
+    homeScore,
+    awayScore,
+    predictsExtraTime,
+    predictsPenalties,
+    extraTimeHomeScore,
+    extraTimeAwayScore,
+    penaltyWinnerTeamId
+  ]);
+
+  useEffect(() => {
+    if (!match.stage_is_knockout || !normalTimeTied || !predictsExtraTime) {
+      return;
+    }
+
+    if (!extraTimeScoresFilled) {
+      if (predictsPenalties) setPredictsPenalties(false);
+      if (penaltyWinnerTeamId !== "") setPenaltyWinnerTeamId("");
+      return;
+    }
+
+    if (extraTimeHomeScore === extraTimeAwayScore) {
+      if (!predictsPenalties) {
+        setPredictsPenalties(true);
+      }
+    } else {
+      if (predictsPenalties) {
+        setPredictsPenalties(false);
+      }
+      if (penaltyWinnerTeamId !== "") {
+        setPenaltyWinnerTeamId("");
+      }
+    }
+  }, [
+    match.stage_is_knockout,
+    normalTimeTied,
+    predictsExtraTime,
+    predictsPenalties,
+    extraTimeScoresFilled,
+    extraTimeHomeScore,
+    extraTimeAwayScore,
+    penaltyWinnerTeamId
+  ]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled) return;
@@ -186,32 +365,30 @@ export function PredictionFormClient({
       </div>
 
       {match.stage_is_knockout ? (
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: teamName(teams, match.home_team_id), value: match.home_team_id, current: "home" as const },
-            { label: teamName(teams, match.away_team_id), value: match.away_team_id, current: "away" as const }
-          ].map((option) => (
-            <label
-              key={option.value}
-              className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border px-3 py-3 text-center transition ${
-                selectedWinner === option.current
-                  ? "border-amber-600 bg-amber-50 text-amber-950"
-                  : "border-emerald-900/10 bg-white text-turf"
-              } ${disabled ? "pointer-events-none opacity-50" : ""}`}
-            >
-              <input
-                type="radio"
-                name="predicted_winner_team_id"
-                value={option.value}
-                checked={selectedWinner === option.current}
-                onChange={() => setSelectedWinner(option.current)}
-                className="sr-only"
-                disabled={disabled}
-                required
-              />
-              <TeamStack {...teamDisplayParts(teams, option.value)} align="center" />
-            </label>
-          ))}
+        <div className="rounded-2xl border border-emerald-900/10 bg-white px-4 py-3">
+          <input
+            type="hidden"
+            name="predicted_outcome"
+            value={knockoutPrediction?.outcome ?? ""}
+          />
+          <input
+            type="hidden"
+            name="predicted_winner_team_id"
+            value={knockoutPrediction?.winnerTeamId ?? savedWinnerTeamId ?? ""}
+          />
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950/60">
+            Winner follows the score
+          </p>
+          <p className="mt-2 text-sm font-medium text-turf">
+            {knockoutPrediction?.winnerTeamId ? (
+              <>
+                Winner: {teamName(teams, knockoutPrediction.winnerTeamId)}
+                {knockoutPrediction.outcome ? ` (${knockoutPrediction.outcome.replace("_", " ").toLowerCase()})` : ""}
+              </>
+            ) : (
+              "Enter scores, and the winner will be derived automatically."
+            )}
+          </p>
         </div>
       ) : null}
 
@@ -263,14 +440,14 @@ export function PredictionFormClient({
       )}
 
       {match.stage_is_knockout ? (
-        <div className="space-y-4 rounded-[24px] bg-amber-50 p-4">
+        <div className={`space-y-4 rounded-[24px] bg-amber-50 p-4 ${normalTimeTied ? "" : "opacity-75"}`}>
           <label className="flex items-center gap-3 text-sm font-semibold text-turf">
             <input
               type="checkbox"
               name="predicts_extra_time"
               checked={predictsExtraTime}
+              disabled={disabled || !normalTimeTied}
               onChange={(event) => setPredictsExtraTime(event.target.checked)}
-              disabled={disabled}
             />
             Goes to extra time
           </label>
@@ -285,7 +462,7 @@ export function PredictionFormClient({
                 setExtraTimeHomeScore(event.target.value === "" ? "" : Number(event.target.value))
               }
               className="field"
-              disabled={disabled}
+              disabled={disabled || !predictsExtraTime}
             />
             <input
               type="number"
@@ -297,7 +474,7 @@ export function PredictionFormClient({
                 setExtraTimeAwayScore(event.target.value === "" ? "" : Number(event.target.value))
               }
               className="field"
-              disabled={disabled}
+              disabled={disabled || !predictsExtraTime}
             />
           </div>
           <label className="flex items-center gap-3 text-sm font-semibold text-turf">
@@ -305,8 +482,8 @@ export function PredictionFormClient({
               type="checkbox"
               name="predicts_penalties"
               checked={predictsPenalties}
+              disabled={disabled || !extraTimeTied}
               onChange={(event) => setPredictsPenalties(event.target.checked)}
-              disabled={disabled}
             />
             Goes to penalties
           </label>
@@ -314,8 +491,9 @@ export function PredictionFormClient({
             name="predicted_penalty_winner_team_id"
             className="field"
             value={penaltyWinnerTeamId}
+            required={predictsPenalties && extraTimeTied}
             onChange={(event) => setPenaltyWinnerTeamId(event.target.value)}
-            disabled={disabled}
+            disabled={disabled || !extraTimeTied}
           >
             <option value="">Penalty winner</option>
             <option value={match.home_team_id}>{teamName(teams, match.home_team_id)}</option>
