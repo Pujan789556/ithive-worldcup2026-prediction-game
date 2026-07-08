@@ -85,6 +85,7 @@ Sample members, groups, teams, and fixtures live in `db/seed.sql`.
 ## Authentication
 
 - Seed members manually or through `db/seed.sql`.
+- If you add a member mid-game, set `members.accounting_start_at` to the match lock time you want them to start from; leave it `NULL` to include their full history.
 - The seeded temporary password is only for first login.
 - The current development seed password is `Office@2026`.
 - Users must change their password on first login before they can join the dashboard.
